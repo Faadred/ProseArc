@@ -8,31 +8,45 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Slim left sidebar: Library / Workspace / Review / Glossary -->
+  <!-- Sidebar: global pages on top; the open book's pages appear under its cover. -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="mark">ProseArc</div>
-      <div class="sub" data-i18n="brand.sub">The translator's desk</div>
+      <img class="brand-mark" src="assets/mark-gold.svg" alt="" />
+      <div>
+        <div class="mark">ProseArc</div>
+        <div class="sub" data-i18n="brand.sub">The translator's desk</div>
+      </div>
     </div>
 
-    <button class="nav-item active" data-view="library"><span class="dot"></span><span data-i18n="nav.library">Library</span></button>
-    <button class="nav-item" data-view="workspace"><span class="dot"></span><span data-i18n="nav.workspace">Workspace</span></button>
-    <button class="nav-item" data-view="review"><span class="dot"></span><span data-i18n="nav.review">Review</span></button>
-    <button class="nav-item" data-view="reader"><span class="dot"></span><span data-i18n="nav.reader">Read</span></button>
-    <button class="nav-item" data-view="glossary"><span class="dot"></span><span data-i18n="nav.glossary">Glossary</span></button>
+    <nav class="nav-group">
+      <button class="nav-item active" data-view="library"><i data-icon="library"></i><span data-i18n="nav.library">Library</span></button>
+      <button class="nav-item" data-view="glossary"><i data-icon="book-a"></i><span data-i18n="nav.glossary">Glossary</span></button>
+    </nav>
+
+    <!-- Shown only while a book is open -->
+    <nav class="nav-group book-nav" id="book-nav" hidden>
+      <div class="nav-label" data-i18n="nav.openBook">Open book</div>
+      <button class="nav-item book-chip" data-view="hub">
+        <span class="book-chip-cover" id="bn-cover"></span>
+        <span class="book-chip-text">
+          <span class="book-chip-title" id="bn-title"></span>
+          <span class="book-chip-meta" id="bn-meta"></span>
+        </span>
+      </button>
+      <button class="nav-item" data-view="workspace"><i data-icon="languages"></i><span data-i18n="nav.translate">Translate</span></button>
+      <button class="nav-item" data-view="review"><i data-icon="pencil-line"></i><span data-i18n="nav.review">Review</span></button>
+      <button class="nav-item" data-view="reader"><i data-icon="book-open-text"></i><span data-i18n="nav.reader">Read</span></button>
+    </nav>
 
     <div class="nav-spacer"></div>
 
-    <button class="nav-item boxed" data-view="settings"><span class="ic" aria-hidden="true">⚙️</span><span data-i18n="nav.settings">Settings</span></button>
-
-    <button class="theme-toggle" id="lang-toggle" title="Language">
-      <span class="ic">🌐</span>
-      <span id="lang-lbl">العربية</span>
-    </button>
-    <button class="theme-toggle" id="theme-toggle" title="Switch light / dark">
-      <span class="ic" id="theme-ic">🌙</span>
-      <span id="theme-lbl">Dark</span>
-    </button>
+    <div class="sidebar-foot">
+      <button class="nav-item" data-view="settings"><i data-icon="settings"></i><span data-i18n="nav.settings">Settings</span></button>
+      <div class="foot-tools">
+        <button class="icon-btn" id="theme-toggle" data-i18n-title="theme.toggle" title="Light / dark"><i data-icon="moon"></i></button>
+        <button class="icon-btn lang-btn" id="lang-toggle" data-i18n-title="lang.toggle" title="Language"><span id="lang-lbl">ع</span></button>
+      </div>
+    </div>
   </aside>
 
   <main class="main">
@@ -41,36 +55,51 @@
       <div class="view-head">
         <div>
           <h1 data-i18n="lib.title">Library</h1>
-          <p class="lede" data-i18n="lib.lede">Your translation projects.</p>
+          <p class="lede" id="lib-lede">Your books in translation.</p>
         </div>
-        <button class="btn btn-primary" id="new-project-btn" data-i18n="lib.new">New Project</button>
+        <button class="btn btn-primary" id="new-project-btn"><i data-icon="plus"></i><span data-i18n="lib.new">Import book</span></button>
       </div>
       <div id="library-body"><!-- cards or empty state injected here --></div>
     </section>
 
-    <!-- BOOK HUB — a page per book ----------------------------------------- -->
+    <!-- BOOK HUB — a page per book: cover, progress, the next step, the path -->
     <section class="view" id="view-hub">
-      <button class="hub-back" id="hub-back"><span>‹</span> <span data-i18n="hub.back">Library</span></button>
-      <div class="hub-card">
-        <div class="hub-cover" id="hub-cover"><span id="hub-initial">?</span></div>
+      <div class="hub">
+        <div class="hub-cover" id="hub-cover"></div>
         <div class="hub-info">
-          <h1 id="hub-title">Book</h1>
-          <div class="hub-langs" id="hub-langs"></div>
-          <div class="progress hub-progress">
-            <div class="progress-track"><div class="progress-fill" id="hub-bar-fill" style="width:0%"></div></div>
-            <div class="progress-meta" id="hub-counts"></div>
+          <div class="hub-top">
+            <div>
+              <h1 id="hub-title" dir="auto">Book</h1>
+              <div class="hub-langs" id="hub-langs"></div>
+            </div>
+            <button class="icon-btn" id="hub-menu" aria-haspopup="menu" data-i18n-title="card.more" title="More actions"><i data-icon="ellipsis"></i></button>
           </div>
-          <div class="hub-actions">
-            <button class="btn btn-primary" id="hub-read" data-i18n="hub.read">Read</button>
-            <button class="btn btn-ghost" id="hub-translate" data-i18n="hub.translate">Translate</button>
-            <button class="btn btn-ghost" id="hub-review" data-i18n="hub.review">Review</button>
-            <button class="btn btn-ghost" id="hub-export" data-i18n="hub.export">Export…</button>
+          <div class="hub-progress">
+            <div class="book-progress big"><span class="bp-reviewed" id="hub-bar-reviewed"></span><span class="bp-translated" id="hub-bar-fill"></span></div>
+            <div class="progress-legend">
+              <span><i class="lg-dot translated"></i><span id="hub-count-t"></span></span>
+              <span><i class="lg-dot reviewed"></i><span id="hub-count-r"></span></span>
+            </div>
           </div>
-          <div class="hub-meta-actions">
-            <button class="btn btn-ghost btn-sm" id="hub-rename" data-i18n="hub.rename">Rename</button>
-            <button class="btn btn-ghost btn-sm" id="hub-cover-btn" data-i18n="hub.cover">Cover…</button>
-            <button class="btn btn-ghost btn-sm" id="hub-cover-remove" data-i18n="hub.coverRemove" hidden>Remove cover</button>
-            <button class="btn btn-danger btn-sm" id="hub-delete" data-i18n="card.delete">Delete</button>
+          <button class="btn btn-primary btn-lg" id="hub-next"></button>
+
+          <div class="hub-steps">
+            <button class="step-tile" data-go="workspace">
+              <span class="step-icon"><i data-icon="languages"></i></span>
+              <span class="step-text"><strong data-i18n="hub.translate">Translate</strong><span id="hub-st-translate"></span></span>
+            </button>
+            <button class="step-tile" data-go="review">
+              <span class="step-icon"><i data-icon="pencil-line"></i></span>
+              <span class="step-text"><strong data-i18n="hub.review">Review</strong><span id="hub-st-review"></span></span>
+            </button>
+            <button class="step-tile" data-go="reader">
+              <span class="step-icon"><i data-icon="book-open-text"></i></span>
+              <span class="step-text"><strong data-i18n="hub.read">Read</strong><span data-i18n="hub.readD">Read it as a book</span></span>
+            </button>
+            <button class="step-tile" data-go="export">
+              <span class="step-icon"><i data-icon="download"></i></span>
+              <span class="step-text"><strong data-i18n="hub.exportT">Export</strong><span data-i18n="hub.exportD">PDF, EPUB, TXT or Markdown</span></span>
+            </button>
           </div>
         </div>
       </div>
@@ -458,7 +487,7 @@
   <!-- New Project modal ---------------------------------------------------- -->
   <div class="modal-backdrop" id="new-project-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="np-title">
-      <h2 id="np-title" data-i18n="np.title">New Project</h2>
+      <h2 id="np-title" data-i18n="np.title">Import a book</h2>
       <p class="modal-sub" data-i18n="np.sub">Import a manuscript and set up its translation.</p>
 
       <div class="field">
@@ -488,7 +517,7 @@
 
       <div class="modal-actions">
         <button class="btn btn-ghost" id="np-cancel" data-i18n="np.cancel">Cancel</button>
-        <button class="btn btn-primary" id="np-create" disabled data-i18n="np.create">Create Project</button>
+        <button class="btn btn-primary" id="np-create" disabled data-i18n="np.create">Import</button>
       </div>
     </div>
   </div>
@@ -582,7 +611,8 @@
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <div class="menu" id="menu" role="menu" hidden></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <!-- Shared language suggestions for all source/target fields (still typeable). -->
   <datalist id="lang-list">
@@ -616,6 +646,7 @@
     <option value="Turkish"></option>
   </datalist>
 
+  <script src="icons.js"></script>
   <script src="i18n.js"></script>
   <script src="renderer.js"></script>
 </body>

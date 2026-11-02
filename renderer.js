@@ -5,12 +5,21 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-function toast(message) {
-  const el = $('#toast');
-  el.textContent = message;
-  el.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove('show'), 2600);
+// Short messages that need no answer. kind: 'info' | 'success' | 'error'.
+// They stack in the bottom corner and fade out on their own (errors stay longer).
+const TOAST_ICON = { info: 'info', success: 'circle-check', error: 'circle-alert' };
+function toast(message, kind = 'info') {
+  const box = $('#toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  el.innerHTML = `${icon(TOAST_ICON[kind] || 'info')}<span>${escapeHtml(message)}</span>`;
+  box.appendChild(el);
+  while (box.children.length > 3) box.firstElementChild.remove();
+  requestAnimationFrame(() => el.classList.add('show'));
+  const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 220); };
+  el.addEventListener('click', close);
+  setTimeout(close, kind === 'error' ? 6000 : 3200);
 }
 
 function escapeHtml(s) {
@@ -30,75 +39,172 @@ function showView(name) {
   if (name === 'settings') renderSettings();
   if (name === 'reader') renderReader();
   if (name === 'hub') renderHub();
+  if (name === 'library') renderLibrary();
 }
 
 $$('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => showView(btn.dataset.view));
 });
 
+// ---- Pop-up menu (⋯) --------------------------------------------------------
+// openMenu(anchor, [{ icon, label, action, danger }]) shows a small menu under
+// the anchor button, aligned to its end edge. Click outside or Escape closes it.
+function openMenu(anchor, items) {
+  const menu = $('#menu');
+  menu.innerHTML = items.map((it, i) => `
+    <button class="menu-item${it.danger ? ' danger' : ''}" role="menuitem" data-i="${i}">
+      ${icon(it.icon)}<span>${escapeHtml(it.label)}</span></button>`).join('');
+  menu.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const m = menu.getBoundingClientRect();
+  const rtl = document.documentElement.dir === 'rtl';
+  let left = rtl ? r.left : r.right - m.width;
+  left = Math.max(8, Math.min(left, window.innerWidth - m.width - 8));
+  let top = r.bottom + 6;
+  if (top + m.height > window.innerHeight - 8) top = r.top - m.height - 6;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.onclick = (e) => {
+    const b = e.target.closest('.menu-item');
+    if (!b) return;
+    closeMenu();
+    items[+b.dataset.i].action();
+  };
+  menu.querySelector('.menu-item')?.focus();
+  anchor.setAttribute('aria-expanded', 'true');
+  openMenu._anchor = anchor;
+}
+function closeMenu() {
+  $('#menu').hidden = true;
+  if (openMenu._anchor) openMenu._anchor.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('mousedown', (e) => {
+  if ($('#menu').hidden || e.target.closest('#menu')) return;
+  if (openMenu._anchor && openMenu._anchor.contains(e.target)) return;
+  closeMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#menu').hidden) closeMenu(); });
+window.addEventListener('resize', closeMenu);
+$('.main').addEventListener('scroll', closeMenu, { passive: true });
+
 // ---- Library ----------------------------------------------------------------
+// The next step for a book, used by the card's main button and the book page.
+function nextStep(c) {
+  if (c.translated === 0) return { view: 'workspace', label: t('card.start'), icon: 'play' };
+  if (c.translated < c.total) return { view: 'workspace', label: t('card.continue'), icon: 'languages' };
+  if (c.reviewed < c.total) return { view: 'review', label: t('card.continueReview'), icon: 'pencil-line' };
+  return { view: 'reader', label: t('card.read'), icon: 'book-open-text' };
+}
+
 async function renderLibrary() {
   const body = $('#library-body');
   const projects = await window.api.listProjects();
+  $('#new-project-btn').hidden = projects.length === 0;
+  $('#lib-lede').textContent = projects.length ? t('lib.lede') : t('lib.ledeEmpty');
 
   if (projects.length === 0) {
     body.innerHTML = `
-      <div class="empty">
-        <h2>${t('lib.emptyTitle')}</h2>
-        <p>${t('lib.emptyBody')}</p>
-        <button class="btn btn-primary" id="empty-new">${t('lib.emptyBtn')}</button>
+      <div class="first-run">
+        <button class="import-hero" id="empty-new">
+          <span class="import-hero-icon">${icon('file-up')}</span>
+          <span class="import-hero-title">${t('lib.emptyTitle')}</span>
+          <span class="import-hero-body">${t('lib.emptyBody')}</span>
+          <span class="btn btn-primary btn-lg">${icon('plus')}${t('lib.emptyBtn')}</span>
+        </button>
+        <ol class="steps">
+          ${[['file-up', 1], ['languages', 2], ['pencil-line', 3], ['book-open-text', 4]].map(([ic, n]) => `
+            <li class="step"><span class="step-icon">${icon(ic)}</span>
+              <span class="step-text"><strong>${t('lib.step' + n)}</strong><span>${t('lib.step' + n + 'd')}</span></span></li>`).join('')}
+        </ol>
       </div>`;
     $('#empty-new').addEventListener('click', openNewProjectModal);
     return;
   }
 
-  body.innerHTML = `<div class="project-grid">${projects.map(cardHtml).join('')}</div>`;
+  body.innerHTML = `<div class="book-grid">${projects.map(cardHtml).join('')}
+    <button class="book-add" id="lib-add">
+      <span class="book-add-inner"><span class="book-add-icon">${icon('plus')}</span><span>${t('lib.addTile')}</span></span>
+    </button></div>`;
+  $('#lib-add').addEventListener('click', openNewProjectModal);
 
-  // Wire each card.
-  $$('.project-card').forEach((card) => {
-    const id = card.dataset.id;
+  projects.forEach((p) => {
+    const card = body.querySelector(`.book-card[data-id="${p.id}"]`);
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.card-actions')) return; // let action buttons handle themselves
-      openBook(id);
+      if (e.target.closest('.js-menu, .js-next')) return;
+      openBook(p.id);
     });
-    // Keyboard: Enter/Space opens the focused card.
     card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBook(id); }
+      if (e.target !== card) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBook(p.id); }
     });
-    card.querySelector('.js-open').addEventListener('click', () => openBook(id));
-    card.querySelector('.js-delete').addEventListener('click', () => deleteProject(id, card));
+    card.querySelector('.js-next').addEventListener('click', async () => {
+      await loadProject(p.id);
+      showView(nextStep(p.counts).view);
+    });
+    card.querySelector('.js-menu').addEventListener('click', (e) => {
+      openMenu(e.currentTarget, bookMenuItems(p.id));
+    });
+  });
+
+  // The list holds summaries only; fetch each book once for its cover image.
+  const full = await Promise.all(projects.map((p) => window.api.getProject(p.id).catch(() => null)));
+  full.forEach((p) => {
+    if (!p || !p.coverUrl) return;
+    const el = body.querySelector(`.book-card[data-id="${p.id}"] .book-cover`);
+    if (el) el.innerHTML = coverHtml(p);
   });
 }
 
 function cardHtml(p) {
   const { total, translated, reviewed } = p.counts;
-  const pct = total ? Math.round((translated / total) * 100) : 0;
-  const cover = p.coverUrl
-    ? `<div class="card-cover"><img src="${p.coverUrl}" alt="" /></div>`
-    : `<div class="card-cover" style="background:${coverColor(p.name)}"><span>${escapeHtml((p.name || '?').trim()[0] || '?')}</span></div>`;
+  const pctT = total ? Math.round((translated / total) * 100) : 0;
+  const pctR = total ? Math.round((reviewed / total) * 100) : 0;
+  const done = total > 0 && reviewed === total;
+  const next = nextStep(p.counts);
   return `
-    <div class="project-card" data-id="${p.id}" tabindex="0">
-      ${cover}
-      <div>
-        <h3>${escapeHtml(p.name)}</h3>
-        <div class="langs">${escapeHtml(p.sourceLang)} → ${escapeHtml(p.targetLang)}</div>
+    <article class="book-card" data-id="${p.id}" tabindex="0" aria-label="${escapeHtml(p.name)}">
+      <div class="book-cover">${coverHtml(p)}</div>
+      ${done ? `<span class="book-badge">${icon('circle-check')}${t('card.done')}</span>` : ''}
+      <button class="icon-btn book-menu js-menu" aria-haspopup="menu" aria-label="${t('card.more')}" title="${t('card.more')}">${icon('ellipsis')}</button>
+      <div class="book-info">
+        <h3 class="book-title" dir="auto">${escapeHtml(p.name)}</h3>
+        <div class="book-langs">${escapeHtml(p.sourceLang)} → ${escapeHtml(p.targetLang)}</div>
+        <div class="book-progress" title="${escapeHtml(t('stats', { t: translated, n: total, r: reviewed }))}">
+          <span class="bp-reviewed" style="width:${pctR}%"></span><span class="bp-translated" style="width:${pctT - pctR}%"></span>
+        </div>
+        <div class="book-foot">
+          <span class="book-pct">${t('card.meta', { pct: pctT, r: reviewed })}</span>
+          <button class="btn btn-ghost btn-sm js-next">${icon(next.icon)}${next.label}</button>
+        </div>
       </div>
-      <div class="progress">
-        <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div class="progress-meta">${t('stats', { t: translated, n: total, r: reviewed })}</div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-ghost btn-sm js-open">${t('card.open')}</button>
-        <button class="btn btn-danger btn-sm js-delete">${t('card.delete')}</button>
-      </div>
-    </div>`;
+    </article>`;
 }
 
-async function deleteProject(id, cardEl) {
-  const name = cardEl.querySelector('h3').textContent;
-  if (!confirm(t('confirm.delete', { name }))) return;
-  await window.api.deleteProject(id);
-  toast(t('toast.deleted'));
+// Rename / cover / delete for any book (from its card or its book page).
+function bookMenuItems(id, { withRemoveCover = false } = {}) {
+  const withBook = (fn) => async () => {
+    const p = (currentProject && currentProject.id === id) ? currentProject : await window.api.getProject(id);
+    fn(p);
+  };
+  const items = [
+    { icon: 'pencil', label: t('hub.rename'), action: withBook(openRenameModal) },
+    { icon: 'image', label: t('hub.cover'), action: withBook(changeCover) },
+  ];
+  if (withRemoveCover) items.push({ icon: 'x', label: t('hub.coverRemove'), action: withBook(removeCover) });
+  items.push({ icon: 'trash-2', label: t('card.delete'), danger: true, action: withBook(deleteBook) });
+  return items;
+}
+
+async function deleteBook(p) {
+  if (!confirm(t('confirm.delete', { name: p.name }))) return;
+  await window.api.deleteProject(p.id);
+  if (currentProject && currentProject.id === p.id) {
+    currentProject = null;
+    currentProjectId = null;
+    renderBookNav();
+    showView('library');
+  }
+  toast(t('toast.deleted'), 'success');
   renderLibrary();
 }
 
@@ -121,6 +227,7 @@ function countStatuses(segments) {
 function renderProgress(counts) {
   const pct = counts.total ? Math.round((counts.translated / counts.total) * 100) : 0;
   $('#ws-bar').style.width = `${pct}%`;
+  if (currentProject && $('#bn-meta')) $('#bn-meta').textContent = t('bn.meta', { pct });
   $('#ws-counter').textContent =
     t('stats', { t: counts.translated, n: counts.total, r: counts.reviewed });
 }
@@ -151,6 +258,7 @@ async function loadProject(id) {
 
   $('#workspace-empty').hidden = true;
   $('#workspace-panel').hidden = false;
+  renderBookNav();
 }
 
 // Clicking a book in the Library lands on its hub page.
@@ -165,8 +273,39 @@ async function openProject(id) {
   showView('workspace');
 }
 
+// ---- Covers -----------------------------------------------------------------
+// A book's cover: the real image when there is one, otherwise a generated
+// cover (its title set on a tinted background). `mini` = just the initial.
+function coverHtml(p, { mini = false } = {}) {
+  if (p.coverUrl) return `<img src="${p.coverUrl}" alt="" draggable="false" />`;
+  const name = (p.name || '?').trim();
+  const bg = coverColor(name);
+  if (mini) {
+    return `<span class="gen-cover mini" style="--cover:${bg}"><span>${escapeHtml(name[0] || '?')}</span></span>`;
+  }
+  return `<span class="gen-cover" style="--cover:${bg}">
+      <span class="gen-title" dir="auto">${escapeHtml(name)}</span>
+      <span class="gen-rule"></span>
+      <span class="gen-langs" dir="auto">${escapeHtml(p.sourceLang || '')} → ${escapeHtml(p.targetLang || '')}</span>
+    </span>`;
+}
+
+// ---- Open book in the sidebar ----------------------------------------------
+function renderBookNav() {
+  const nav = $('#book-nav');
+  if (!currentProject) { nav.hidden = true; return; }
+  const p = currentProject;
+  const c = countStatuses(p.segments);
+  const pct = c.total ? Math.round((c.translated / c.total) * 100) : 0;
+  $('#bn-cover').innerHTML = coverHtml(p, { mini: true });
+  $('#bn-title').textContent = p.name;
+  $('#bn-meta').textContent = t('bn.meta', { pct });
+  nav.hidden = false;
+}
+
 // ---- Book hub ---------------------------------------------------------------
-const HUB_COLORS = ['#3a5750', '#5a4040', '#3f4a5e', '#574a63', '#5e5333', '#42565e'];
+// Cloth colours for generated covers (deep enough for white text in both themes).
+const HUB_COLORS = ['#2F5D5A', '#6B3236', '#2E4366', '#4E3A5F', '#5B5428', '#35533A', '#6A4A2C', '#3C5866'];
 function coverColor(name) {
   let h = 0;
   const s = String(name || '');
@@ -177,77 +316,86 @@ function renderHub() {
   if (!currentProject) return;
   const p = currentProject;
   const c = countStatuses(p.segments);
-  const pct = c.total ? Math.round((c.translated / c.total) * 100) : 0;
+  const pctT = c.total ? Math.round((c.translated / c.total) * 100) : 0;
+  const pctR = c.total ? Math.round((c.reviewed / c.total) * 100) : 0;
   $('#hub-title').textContent = p.name;
   $('#hub-langs').textContent = `${p.sourceLang} → ${p.targetLang}`;
-  const cover = $('#hub-cover');
-  if (p.coverUrl) {
-    cover.style.background = 'none';
-    cover.innerHTML = `<img src="${p.coverUrl}" alt="" />`;
-  } else {
-    cover.style.background = coverColor(p.name);
-    cover.innerHTML = `<span id="hub-initial">${escapeHtml((p.name || '?').trim()[0] || '?')}</span>`;
-  }
-  $('#hub-cover-remove').hidden = !p.coverUrl;
-  $('#hub-bar-fill').style.width = `${pct}%`;
-  $('#hub-counts').textContent = t('stats', { t: c.translated, n: c.total, r: c.reviewed });
+  $('#hub-cover').innerHTML = coverHtml(p);
+  $('#hub-bar-reviewed').style.width = `${pctR}%`;
+  $('#hub-bar-fill').style.width = `${pctT - pctR}%`;
+  $('#hub-count-t').textContent = t('hub.countT', { t: c.translated, n: c.total });
+  $('#hub-count-r').textContent = t('hub.countR', { r: c.reviewed, n: c.total });
+  $('#hub-st-translate').textContent = c.translated >= c.total ? t('hub.stDone') : t('hub.stPct', { pct: pctT });
+  $('#hub-st-review').textContent = c.reviewed >= c.total ? t('hub.stDone') : t('hub.stPct', { pct: pctR });
+  const next = nextStep(c);
+  $('#hub-next').innerHTML = `${icon(next.icon)}<span>${escapeHtml(next.label)}</span>`;
+  $('#hub-next').dataset.go = next.view;
 }
 
 // Rename runs through an in-app modal: window.prompt() is not supported in
 // Electron renderers (it silently does nothing).
-function openRenameModal() {
-  if (!currentProject) return;
-  $('#rn-input').value = currentProject.name;
+let renameTarget = null;
+function openRenameModal(p = currentProject) {
+  if (!p) return;
+  renameTarget = p;
+  $('#rn-input').value = p.name;
   $('#rename-modal').classList.add('open');
   $('#rn-input').focus();
   $('#rn-input').select();
 }
 function closeRenameModal() { $('#rename-modal').classList.remove('open'); }
 async function saveRename() {
-  if (!currentProject) return;
+  const p = renameTarget;
+  if (!p) return;
   const clean = $('#rn-input').value.trim();
   closeRenameModal();
-  if (!clean || clean === currentProject.name) return;
-  currentProject.name = clean;
-  $('#ws-name').value = clean;
-  $('#ws-title').textContent = clean;
-  await window.api.saveProject(currentProject);
-  renderHub();
-}
-
-async function changeCover() {
-  if (!currentProject) return;
-  const res = await window.api.pickCover(currentProject.id);
-  if (!res) return; // user cancelled the picker
-  if (res.error) { toast(t('toast.coverError')); return; }
-  currentProject.coverUrl = res.coverUrl;
-  renderHub();
-}
-async function removeCover() {
-  if (!currentProject) return;
-  await window.api.removeCover(currentProject.id);
-  currentProject.coverUrl = null;
-  renderHub();
-}
-async function deleteCurrentBook() {
-  if (!currentProject) return;
-  if (!confirm(t('confirm.delete', { name: currentProject.name }))) return;
-  await window.api.deleteProject(currentProject.id);
-  currentProject = null;
-  currentProjectId = null;
-  toast(t('toast.deleted'));
-  showView('library');
+  if (!clean || clean === p.name) return;
+  p.name = clean;
+  await window.api.saveProject(p);
+  if (currentProject && currentProject.id === p.id) {
+    currentProject.name = clean;
+    $('#ws-name').value = clean;
+    $('#ws-title').textContent = clean;
+    renderHub();
+    renderBookNav();
+  }
   renderLibrary();
 }
-$('#hub-read').addEventListener('click', () => showView('reader'));
-$('#hub-translate').addEventListener('click', () => showView('workspace'));
-$('#hub-review').addEventListener('click', () => showView('review'));
-$('#hub-export').addEventListener('click', () => openExportModal());
-$('#hub-back').addEventListener('click', () => { showView('library'); renderLibrary(); });
-$('#hub-rename').addEventListener('click', openRenameModal);
-$('#hub-cover-btn').addEventListener('click', changeCover);
-$('#hub-cover-remove').addEventListener('click', removeCover);
-$('#hub-delete').addEventListener('click', deleteCurrentBook);
+
+async function changeCover(p = currentProject) {
+  if (!p) return;
+  const res = await window.api.pickCover(p.id);
+  if (!res) return; // user cancelled the picker
+  if (res.error) { toast(t('toast.coverError'), 'error'); return; }
+  p.coverUrl = res.coverUrl;
+  if (currentProject && currentProject.id === p.id) {
+    currentProject.coverUrl = res.coverUrl;
+    renderHub();
+    renderBookNav();
+  }
+  renderLibrary();
+}
+async function removeCover(p = currentProject) {
+  if (!p) return;
+  await window.api.removeCover(p.id);
+  p.coverUrl = null;
+  if (currentProject && currentProject.id === p.id) {
+    currentProject.coverUrl = null;
+    renderHub();
+    renderBookNav();
+  }
+  renderLibrary();
+}
+// Book page: the next-step button and the four step tiles.
+$('#view-hub').addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]');
+  if (!go) return;
+  if (go.dataset.go === 'export') openExportModal();
+  else showView(go.dataset.go);
+});
+$('#hub-menu').addEventListener('click', (e) => {
+  if (currentProject) openMenu(e.currentTarget, bookMenuItems(currentProject.id, { withRemoveCover: !!currentProject.coverUrl }));
+});
 $('#rn-save').addEventListener('click', saveRename);
 $('#rn-cancel').addEventListener('click', closeRenameModal);
 $('#rn-input').addEventListener('keydown', (e) => {
@@ -271,6 +419,7 @@ async function saveSettings() {
 
   $('#ws-title').textContent = currentProject.name;
   $('#ws-langs').textContent = `${currentProject.sourceLang} → ${currentProject.targetLang}`;
+  renderBookNav();
 
   await window.api.saveProject(currentProject);
 }
@@ -387,10 +536,10 @@ async function doExport() {
   if (!r || r.canceled) return;
   const F = (r.format || fmt).toUpperCase();
   if (r.untranslated > 0) {
-    toast(t('toast.exportedWarn', { fmt: F, u: r.untranslated, n: r.total }));
+    toast(t('toast.exportedWarn', { fmt: F, u: r.untranslated, n: r.total }), 'info');
     logLine(t('log.exportedWarn', { fmt: F, path: r.path, u: r.untranslated, n: r.total }), 'info');
   } else {
-    toast(t('toast.exported', { n: r.total, fmt: F }));
+    toast(t('toast.exported', { n: r.total, fmt: F }), 'success');
     logLine(t('log.exported', { fmt: F, path: r.path }), 'success');
   }
 }
@@ -433,7 +582,7 @@ window.api.onEngineEvent(async (ev) => {
       break;
     case 'done':
       if (ev.counts) renderProgress(ev.counts);
-      if (ev.reason === 'completed') { logLine(t('log.allTranslated'), 'success'); toast(t('toast.complete')); }
+      if (ev.reason === 'completed') { logLine(t('log.allTranslated'), 'success'); toast(t('toast.complete'), 'success'); }
       else if (ev.reason === 'stopped') { logLine(t('log.stopped'), 'info'); }
       setEngineRunning(false);
       $('#ws-run').disabled = false;
@@ -488,13 +637,13 @@ async function pickFile() {
   if (result.error) {                       // parse failure (corrupt EPUB/DOCX, etc.)
     pickedManuscript = null;
     $('#np-create').disabled = true;
-    toast(t('toast.importError'));
+    toast(t('toast.importError'), 'error');
     return;
   }
   if (Array.isArray(result.blocks) && result.blocks.length === 0) {
     pickedManuscript = null;
     $('#np-create').disabled = true;
-    toast(t('toast.importEmpty'));
+    toast(t('toast.importEmpty'), 'error');
     return;
   }
 
@@ -524,7 +673,7 @@ async function createProject() {
   $('#np-create').disabled = true;
   const project = await window.api.createProject(input);
   closeNewProjectModal();
-  toast(t('toast.created', { name: project.name, n: project.segments.length }));
+  toast(t('toast.created', { name: project.name, n: project.segments.length }), 'success');
   await renderLibrary();
   openBook(project.id); // land on the new book's hub
 }
@@ -846,7 +995,7 @@ async function frReplaceAll() {
   $('#fr-go').disabled = true;
   await window.api.saveProject(currentProject); // one atomic write of the whole project
   closeFrModal();
-  toast(t('fr.done', { n: totalMatches, m: changedSegs }));
+  toast(t('fr.done', { n: totalMatches, m: changedSegs }), 'success');
   updateFilterCounts();
   selectSegment(reviewIndex); // refresh editor + navigator snippets
 }
@@ -929,7 +1078,7 @@ async function markAllReviewed() {
   currentProject = await window.api.getProject(currentProject.id);
   renderNavWindow();
   updateEditorHead();
-  toast(t('toast.allReviewed'));
+  toast(t('toast.allReviewed'), 'success');
 }
 
 $('#rv-retrans-seg').addEventListener('click', retranslateCurrent);
@@ -1025,12 +1174,12 @@ async function addSelectionToGlossary(scope) {
     g.push({ id: crypto.randomUUID(), source, target });
     await window.api.saveGlobalGlossary(g);
     globalGlossary = g;
-    toast(t('gloss.addedShared', { src: source }));
+    toast(t('gloss.addedShared', { src: source }), 'success');
   } else {
     if (!Array.isArray(currentProject.glossary)) currentProject.glossary = [];
     currentProject.glossary.push({ id: crypto.randomUUID(), source, target });
     await window.api.saveGlossary(currentProject.id, currentProject.glossary);
-    toast(t('gloss.addedProject', { src: source }));
+    toast(t('gloss.addedProject', { src: source }), 'success');
   }
   hideGlossPop();
 }
@@ -1238,7 +1387,7 @@ async function addSuggestion(scopeName, source, target) {
   await s.save();
   renderTermList(scopeName);
   renderSuggestions(); // the newly added term is now excluded
-  toast(t('gloss.added', { term: source }));
+  toast(t('gloss.added', { term: source }), 'success');
 }
 
 async function addTerm(name) {
@@ -1281,8 +1430,7 @@ $('#gl-project-add').addEventListener('click', () => addTerm('project'));
 function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'dark'; }
 function updateThemeLabel() {
   const light = currentTheme() === 'light';
-  $('#theme-ic').textContent = light ? '☀️' : '🌙';
-  $('#theme-lbl').textContent = t(light ? 'theme.light' : 'theme.dark');
+  $('#theme-toggle').innerHTML = icon(light ? 'sun' : 'moon');
 }
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
@@ -1297,7 +1445,10 @@ $('#theme-toggle').addEventListener('click', () => {
 //  Language (English default, Arabic optional) — persisted, full RTL
 // ============================================================================
 function updateLangLabel() {
-  $('#lang-lbl').textContent = getLang() === 'en' ? 'العربية' : 'English';
+  // Shows the language you would switch TO.
+  const en = getLang() === 'en';
+  $('#lang-lbl').textContent = en ? 'ع' : 'EN';
+  $('#lang-toggle').classList.toggle('en', !en);
 }
 $('#lang-toggle').addEventListener('click', () => {
   setLang(getLang() === 'en' ? 'ar' : 'en');
@@ -1314,6 +1465,7 @@ window.addEventListener('langchange', () => {
   if ($('#view-glossary').classList.contains('active')) renderGlossary();
   if ($('#view-settings').classList.contains('active')) renderSettings();
   if ($('#view-hub').classList.contains('active')) renderHub();
+  renderBookNav();
   if (isRunning) setEngineRunning(true); // fix dynamic button labels after applyI18n reset
 });
 
@@ -1599,7 +1751,7 @@ function addBookmarkHere() {
   saveBookmarks(pid, arr);
   renderBookmarks();
   markAnnotated();
-  toast(t('reader.marked'));
+  toast(t('reader.marked'), 'success');
 }
 function renderBookmarks() {
   const wrap = $('#rd-marks');
@@ -1774,6 +1926,7 @@ $('#rd-scroll').addEventListener('scroll', () => {
 });
 
 // ---- Boot -------------------------------------------------------------------
+mountIcons();
 setLang(localStorage.getItem('lang') || 'en');   // applies static i18n + fires langchange → renderLibrary
 applyTheme(localStorage.getItem('theme') || 'dark');
 updateLangLabel();
