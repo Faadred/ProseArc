@@ -22,6 +22,7 @@ const DEFAULTS = {
   apiUrl: 'http://localhost:1234/v1/chat/completions', // LM Studio default (used by 'local')
   model: '',                // empty = let the local server use whatever is loaded
   contextWindow: 2,         // preceding translated segments fed as continuity
+  thinking: false,          // let reasoning models "think" first (slower; local models)
 };
 
 // API keys for cloud providers — stored separately from projects, never exported.
@@ -47,7 +48,7 @@ function createStore(projectsDir) {
   const secretsPath = path.join(path.dirname(projectsDir), 'secrets-global.json');
 
   // Only these keys are stored as project defaults; anything else is ignored.
-  const SETTINGS_KEYS = ['provider', 'sourceLang', 'targetLang', 'apiUrl', 'model', 'contextWindow'];
+  const SETTINGS_KEYS = ['provider', 'sourceLang', 'targetLang', 'apiUrl', 'model', 'contextWindow', 'thinking'];
 
   /** Atomically write an object as pretty JSON to `dest`. */
   async function atomicWrite(dest, obj) {
@@ -254,7 +255,8 @@ function createStore(projectsDir) {
 
   /** Atomically save app-wide default settings (only known keys are kept). */
   async function saveSettings(input) {
-    const clean = {};
+    // Merge: a partial save (e.g. from Setup) keeps the other defaults.
+    const clean = await getSettings();
     for (const k of SETTINGS_KEYS) if (input && input[k] !== undefined) clean[k] = input[k];
     await atomicWrite(settingsPath, clean);
     return clean;

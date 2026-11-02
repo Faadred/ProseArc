@@ -38,6 +38,13 @@ contextBridge.exposeInMainWorld('api', {
   startTranslation: (projectId) => ipcRenderer.invoke('engine:start', projectId),
   stopTranslation: () => ipcRenderer.invoke('engine:stop'),
   testConnection: (apiUrl) => ipcRenderer.invoke('engine:testConnection', apiUrl),
+  sampleTranslate: (cfg) => ipcRenderer.invoke('engine:sample', cfg),
+  listModels: (cfg) => ipcRenderer.invoke('engine:listModels', cfg),
+
+  // First-run Setup
+  getSystemInfo: () => ipcRenderer.invoke('system:info'),
+  detectLocalServers: () => ipcRenderer.invoke('local:detect'),
+  applyAiToAllProjects: (ai) => ipcRenderer.invoke('projects:applyAi', ai),
   retranslateSegment: (projectId, segmentId) =>
     ipcRenderer.invoke('engine:retranslateSegment', { projectId, segmentId }),
   resetForRetranslate: (projectId, includeReviewed) =>

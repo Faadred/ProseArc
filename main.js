@@ -3,7 +3,7 @@
 // over IPC (inter-process communication). The renderer can't touch the disk
 // directly; it calls these handlers through the preload bridge.
 
-const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fsp = require('fs/promises');
@@ -16,6 +16,8 @@ const { epubToBlocks } = require('./src/epub');
 const { docxToBlocks } = require('./src/docx');
 const { pdfToBlocks, pdfCover } = require('./src/pdf');
 const os = require('os');
+const { getSystemInfo } = require('./src/hardware');
+const { detectLocalServers } = require('./src/local-servers');
 
 let store;  // initialised once the app is ready and userData path is known.
 let engine; // translation engine, created alongside the store.
@@ -35,6 +37,16 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Links (e.g. "Get a key") open in the user's browser, never inside the app,
+  // and the app window never navigates away from index.html.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:\/\//i.test(url)) shell.openExternal(url); }
   });
 
   win.loadFile('index.html');
@@ -240,6 +252,23 @@ function registerIpc() {
   ipcMain.handle('engine:retranslateSegment', (e, { projectId, segmentId }) =>
     engine.retranslateSegment(projectId, segmentId, e.sender));
   ipcMain.handle('engine:testConnection', (_e, apiUrl) => engine.testConnection(apiUrl));
+  ipcMain.handle('engine:sample', (_e, cfg) => engine.sampleTranslate(cfg || {}));
+  ipcMain.handle('engine:listModels', (_e, cfg) => engine.listModels(cfg || {}));
+
+  // First-run Setup: what this PC can run, and AI apps already running on it.
+  ipcMain.handle('system:info', () => getSystemInfo());
+  ipcMain.handle('local:detect', () => detectLocalServers());
+  // Apply AI settings to every existing book (Setup's "use for my books too").
+  ipcMain.handle('projects:applyAi', async (_e, ai) => {
+    const keys = ['provider', 'apiUrl', 'model', 'thinking'];
+    const list = await store.listProjects();
+    for (const s of list) {
+      const p = await store.getProject(s.id);
+      for (const k of keys) if (ai && k in ai) p[k] = ai[k];
+      await store.saveProject(p);
+    }
+    return list.length;
+  });
   ipcMain.handle('projects:resetForRetranslate', (_e, { projectId, includeReviewed }) =>
     store.resetForRetranslate(projectId, includeReviewed));
   ipcMain.handle('projects:markAllReviewed', (_e, projectId) => store.markAllReviewed(projectId));

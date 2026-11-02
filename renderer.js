@@ -281,6 +281,7 @@ async function loadProject(id) {
   $('#ws-url').value = project.apiUrl;
   $('#ws-model').value = project.model || '';
   $('#ws-context').value = project.contextWindow;
+  $('#ws-thinking').checked = !!project.thinking;
   $('#ws-style').value = project.styleBrief || '';
   $('#ws-provider').value = project.provider || 'local';
   applyProviderVisibility(project.provider || 'local', '#ws-url-field', '#ws-provider-note');
@@ -323,6 +324,14 @@ function coverHtml(p, { mini = false } = {}) {
     </span>`;
 }
 
+// Tooltips for sidebar items: in a narrow window the sidebar shows icons only.
+function syncNavTitles() {
+  $$('.sidebar .nav-item').forEach((b) => {
+    const label = b.querySelector('[data-i18n]') || b.querySelector('.book-chip-title');
+    b.title = label ? label.textContent.trim() : '';
+  });
+}
+
 // ---- Open book in the sidebar ----------------------------------------------
 function renderBookNav() {
   const nav = $('#book-nav');
@@ -334,6 +343,7 @@ function renderBookNav() {
   $('#bn-title').textContent = p.name;
   $('#bn-meta').textContent = t('bn.meta', { pct });
   nav.hidden = false;
+  syncNavTitles();
 }
 
 // ---- Book hub ---------------------------------------------------------------
@@ -447,6 +457,7 @@ async function saveSettings() {
   currentProject.apiUrl = $('#ws-url').value.trim();
   currentProject.model = $('#ws-model').value.trim();
   currentProject.contextWindow = Math.max(0, parseInt($('#ws-context').value, 10) || 0);
+  currentProject.thinking = $('#ws-thinking').checked;
   currentProject.styleBrief = $('#ws-style').value.trim();
   currentProject.provider = $('#ws-provider').value;
 
@@ -465,7 +476,7 @@ function applyProviderVisibility(provider, urlFieldSel, noteSel) {
   if (noteSel) { const n = $(noteSel); if (n) n.style.display = local ? 'none' : ''; }
 }
 
-['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider']
+['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider', '#ws-thinking']
   .forEach((sel) => $(sel).addEventListener('change', saveSettings));
 $('#ws-provider').addEventListener('change', (e) =>
   applyProviderVisibility(e.target.value, '#ws-url-field', '#ws-provider-note'));
@@ -503,7 +514,7 @@ function setEngineRunning(on) {
   btn.innerHTML = `${icon(on ? 'square' : 'play')}<span>${escapeHtml(t(on ? 'ws.stop' : 'ws.start'))}</span>`;
   btn.classList.toggle('btn-stop', on);
   // Lock settings while a run is in progress.
-  ['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider']
+  ['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider', '#ws-thinking']
     .forEach((sel) => { $(sel).disabled = on; });
 
   // Review controls: disable editing actions; "↻ All" becomes a Stop control.
@@ -511,8 +522,9 @@ function setEngineRunning(on) {
     .forEach((sel) => { const el = $(sel); if (el) el.disabled = on; });
   const all = $('#rv-retrans-all');
   if (all) {
-    all.innerHTML = `${icon(on ? 'square' : 'refresh-cw')}<span>${escapeHtml(t(on ? 'rv.stop' : 'rv.all'))}</span>`;
+    all.innerHTML = `${icon(on ? 'square' : 'list-restart')}<span>${escapeHtml(t(on ? 'rv.stop' : 'rv.all'))}</span>`;
     all.classList.toggle('btn-stop', on);
+    all.title = t(on ? 'rv.stop' : 'rv.all');
   }
 }
 
@@ -723,7 +735,7 @@ $('#new-project-modal').addEventListener('click', (e) => {
   if (e.target.id === 'new-project-modal') closeNewProjectModal(); // click backdrop to close
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeNewProjectModal(); closeRetransModal(); closeExportModal(); closeFrModal(); closeRenameModal(); }
+  if (e.key === 'Escape') { closeNewProjectModal(); closeRetransModal(); closeExportModal(); closeFrModal(); closeRenameModal(); closeShortcuts(); }
 });
 
 // ============================================================================
@@ -1503,6 +1515,7 @@ window.addEventListener('langchange', () => {
   if ($('#view-settings').classList.contains('active')) renderSettings();
   if ($('#view-hub').classList.contains('active')) renderHub();
   renderBookNav();
+  syncNavTitles();
   if (isRunning) setEngineRunning(true); // fix dynamic button labels after applyI18n reset
 });
 
@@ -1517,6 +1530,7 @@ async function renderSettings() {
   $('#set-url').value = s.apiUrl || 'http://localhost:1234/v1/chat/completions';
   $('#set-model').value = s.model || '';
   $('#set-context').value = s.contextWindow ?? 2;
+  $('#set-thinking').checked = !!s.thinking;
   $('#set-target').dir = isRtlLang($('#set-target').value) ? 'rtl' : 'auto';
   $('#set-test-result').textContent = '';
   $('#set-test-result').className = 'test-result';
@@ -1541,6 +1555,7 @@ async function saveSettingsForm() {
     apiUrl: $('#set-url').value.trim(),
     model: $('#set-model').value.trim(),
     contextWindow: Math.max(0, parseInt($('#set-context').value, 10) || 0),
+    thinking: $('#set-thinking').checked,
   });
 }
 async function saveSecretsForm() {
@@ -1554,7 +1569,7 @@ async function saveSecretsForm() {
   });
 }
 
-['#set-source', '#set-target', '#set-url', '#set-model', '#set-context', '#set-provider']
+['#set-source', '#set-target', '#set-url', '#set-model', '#set-context', '#set-provider', '#set-thinking']
   .forEach((sel) => $(sel).addEventListener('change', saveSettingsForm));
 $('#set-provider').addEventListener('change', (e) =>
   applyProviderVisibility(e.target.value, '#set-url-field', null));
@@ -1980,6 +1995,41 @@ $('#rd-scroll').addEventListener('scroll', () => {
     const seg = topmostSeg();
     if (seg != null) localStorage.setItem(`reader-pos:${currentProject.id}`, seg);
   }, 400);
+});
+
+// ---- Keyboard shortcuts -----------------------------------------------------
+// [keys, label key, where]. The help window (F1) is built from this list.
+const SHORTCUTS = [
+  ['F1', 'kb.help', 'kb.anywhere'],
+  ['Ctrl+O', 'kb.import', 'kb.anywhere'],
+  ['Ctrl+,', 'kb.settings', 'kb.anywhere'],
+  ['Ctrl+L', 'kb.library', 'kb.anywhere'],
+  ['Ctrl+S', 'kb.save', 'kb.inReview'],
+  ['Alt+↑', 'kb.prev', 'kb.inReview'],
+  ['Alt+↓', 'kb.next', 'kb.inReview'],
+  ['Esc', 'kb.close', 'kb.anywhere'],
+];
+function openShortcuts() {
+  $('#kb-list').innerHTML = `<table class="kb-table">${SHORTCUTS.map(([k, label, where]) => `
+    <tr><td>${k.split('+').map((p) => `<kbd>${escapeHtml(p)}</kbd>`).join('<span class="kb-plus">+</span>')}</td>
+      <td>${escapeHtml(t(label))}</td><td class="kb-where">${escapeHtml(t(where))}</td></tr>`).join('')}</table>`;
+  $('#kb-modal').classList.add('open');
+  $('#kb-close').focus();
+}
+function closeShortcuts() { $('#kb-modal').classList.remove('open'); }
+$('#kb-close').addEventListener('click', closeShortcuts);
+$('#kb-modal').addEventListener('click', (e) => { if (e.target.id === 'kb-modal') closeShortcuts(); });
+$('#set-shortcuts').addEventListener('click', openShortcuts);
+
+document.addEventListener('keydown', (e) => {
+  // Not while a dialog or Setup is open: they own the keyboard.
+  const busy = document.querySelector('.modal-backdrop.open') || !$('#setup').hidden;
+  if (e.key === 'F1') { e.preventDefault(); if (!busy) openShortcuts(); return; }
+  if (busy || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'o') { e.preventDefault(); openNewProjectModal(); }
+  else if (k === ',') { e.preventDefault(); showView('settings'); }
+  else if (k === 'l') { e.preventDefault(); showView('library'); }
 });
 
 // ---- Boot -------------------------------------------------------------------

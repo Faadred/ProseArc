@@ -16,12 +16,25 @@ const RETRY_BACKOFF_MS = 1500;
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Reasoning ("thinking") models may put their reasoning inline before the
+// answer. Keep only the answer: drop <think>…</think> / <thinking>…</thinking>
+// blocks, and anything before a lone closing tag (opening tag cut off).
+function stripThinking(text) {
+  if (!text) return text;
+  let s = String(text).replace(/<(think|thinking)>[\s\S]*?<\/\1>/gi, '');
+  const lone = s.search(/<\/(think|thinking)>/i);
+  if (lone !== -1) s = s.slice(s.indexOf('>', lone) + 1);
+  return s.trim();
+}
+
 function createEngine({ store }) {
   let running = false;
   let aborted = false;
   let controller = null;   // AbortController for the in-flight request
   let emit = () => {};
   let activeSecrets = {};   // cloud API keys, loaded once per run
+  // Local servers that rejected the "no thinking" switch; we stop sending it there.
+  const noReasoningParam = new Set();
 
   // Turn a project + messages into a provider-specific HTTP request.
   // Most providers speak the OpenAI chat-completions shape; Anthropic is native.
@@ -51,10 +64,16 @@ function createEngine({ store }) {
     else if (provider === 'compatible') { url = `${(s.compatibleBaseUrl || '').replace(/\/+$/, '')}/chat/completions`; if (s.compatible) headers.Authorization = `Bearer ${s.compatible}`; missingKey = !s.compatibleBaseUrl; }
     else { url = project.apiUrl; } // local
 
+    const body = { model: model || 'local-model', messages, temperature: 0.3, stream: false };
+    // Thinking models spend most of their time reasoning before each passage,
+    // which plain translation rarely needs. Off by default for local models
+    // (LM Studio honours reasoning_effort "none"); the project can turn it on.
+    if (provider === 'local' && !project.thinking && !noReasoningParam.has(url)) body.reasoning_effort = 'none';
+
     return {
       url,
       headers,
-      body: { model: model || 'local-model', messages, temperature: 0.3, stream: false },
+      body,
       shape: 'openai',
       missingKey,
     };
@@ -68,12 +87,19 @@ function createEngine({ store }) {
       const err = new Error('no api key'); err.noKey = true; throw err;
     }
 
-    const res = await fetch(req.url, {
+    let res = await fetch(req.url, {
       method: 'POST',
       headers: req.headers,
       body: JSON.stringify(req.body),
       signal,
     });
+    // A server that doesn't know the "no thinking" switch may answer 400:
+    // retry once without it, and don't send it to that server again.
+    if (res.status === 400 && req.body.reasoning_effort) {
+      noReasoningParam.add(req.url);
+      delete req.body.reasoning_effort;
+      res = await fetch(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body), signal });
+    }
 
     if (!res.ok) {
       let detail = '';
@@ -85,9 +111,10 @@ function createEngine({ store }) {
     }
 
     const json = await res.json();
-    const content = req.shape === 'anthropic'
+    const raw = req.shape === 'anthropic'
       ? (Array.isArray(json?.content) ? json.content.filter((b) => b.type === 'text').map((b) => b.text).join('') : '')
       : json?.choices?.[0]?.message?.content;
+    const content = stripThinking(raw);
     if (!content || !content.trim()) {
       const err = new Error('empty');
       err.empty = true;
@@ -294,7 +321,68 @@ function createEngine({ store }) {
     }
   }
 
-  return { start, stop, retranslateSegment, testConnection, isRunning: () => running };
+  /**
+   * Translate one sample sentence with the given settings (Setup's quick test).
+   * cfg: { provider, apiUrl, model, thinking, sourceLang, targetLang, text }
+   * → { ok: true, text, ms } or { ok: false, key, params }
+   */
+  async function sampleTranslate(cfg) {
+    activeSecrets = await store.getSecrets();
+    const project = {
+      provider: cfg.provider || 'local', apiUrl: cfg.apiUrl, model: cfg.model || '', thinking: !!cfg.thinking,
+      sourceLang: cfg.sourceLang || 'English', targetLang: cfg.targetLang || 'Arabic',
+      contextWindow: 0, glossary: [],
+      segments: [{ id: 0, type: 'paragraph', original: cfg.text, translation: '', status: 'pending' }],
+    };
+    const ac = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; ac.abort(); }, REQUEST_TIMEOUT_MS);
+    const t0 = Date.now();
+    try {
+      const text = await translateOne(project, 0, ac.signal, []);
+      return { ok: true, text, ms: Date.now() - t0 };
+    } catch (err) {
+      if (timedOut) err.timeout = true;
+      return { ok: false, ...friendlyError(err) };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * List a cloud provider's models with the given key (for suggestions in Setup).
+   * cfg: { provider, key, baseUrl } → { ok: true, models: [ids] } or { ok: false, status }
+   */
+  async function listModels(cfg) {
+    const key = (cfg.key || '').trim();
+    const urls = {
+      openai: 'https://api.openai.com/v1/models',
+      openrouter: 'https://openrouter.ai/api/v1/models',
+      gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/models',
+      anthropic: 'https://api.anthropic.com/v1/models?limit=100',
+      compatible: `${(cfg.baseUrl || '').replace(/\/+$/, '')}/models`,
+    };
+    const url = urls[cfg.provider];
+    if (!url || (cfg.provider === 'compatible' && !cfg.baseUrl)) return { ok: false, status: 0 };
+    const headers = cfg.provider === 'anthropic'
+      ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
+      : (key ? { Authorization: `Bearer ${key}` } : {});
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 10000);
+    try {
+      const res = await fetch(url, { headers, signal: ac.signal });
+      if (!res.ok) return { ok: false, status: res.status };
+      const json = await res.json();
+      const ids = (Array.isArray(json.data) ? json.data : []).map((m) => String(m.id || '').replace(/^models\//, '')).filter(Boolean);
+      return { ok: true, models: ids };
+    } catch {
+      return { ok: false, status: 0 };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  return { start, stop, retranslateSegment, testConnection, sampleTranslate, listModels, isRunning: () => running };
 }
 
 module.exports = { createEngine };
