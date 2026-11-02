@@ -6,7 +6,7 @@
 
 A **human‑in‑the‑loop workspace for translating novels** with a **local or cloud** AI model. Import a manuscript, let the model produce a first‑pass translation, then review it side‑by‑side, read it as a book, and polish it — keeping full control over quality, consistency, and tone.
 
-> **Local by default, cloud optional.** Out of the box, every AI call goes to a *local* server (LM Studio) — nothing leaves your machine. You can optionally connect a cloud provider (OpenAI, OpenRouter, Gemini, Claude); then the text you translate is sent to that provider.
+> **On your PC or online — your choice.** With the built‑in translator (or LM Studio / Ollama), every AI call stays on your machine. If you connect an online provider, the text you translate is sent to that provider.
 
 Built with Electron + plain HTML/CSS/JS — no UI framework.
 
@@ -104,7 +104,7 @@ MIT — see [LICENSE](LICENSE).
 
 **مساحة عمل لترجمة الروايات بإشراف بشري** باستخدام نموذج ذكاء اصطناعي **محلي أو سحابي**. استورد مخطوطة، ودع النموذج يُنتج ترجمة أولية، ثم راجِعها جنبًا إلى جنب، واقرأها ككتاب، وهذّبها — مع تحكّم كامل في الجودة والاتساق والأسلوب.
 
-> **محلي افتراضيًا، وسحابي اختياريًا.** افتراضيًا، كل طلب يذهب إلى خادم *محلي* (LM Studio) — لا شيء يغادر جهازك. ويمكنك اختياريًا ربط مزوّد سحابي (OpenAI أو OpenRouter أو Gemini أو Claude)؛ عندها يُرسَل النص الذي تترجمه إلى ذلك المزوّد.
+> **على جهازك أو عبر الإنترنت — الخيار لك.** مع المترجم المدمج (أو LM Studio / Ollama) يبقى كل طلب على جهازك. وإن ربطت مزوّدًا عبر الإنترنت، يُرسَل النص الذي تترجمه إلى ذلك المزوّد.
 
 مبني على Electron وHTML/CSS/JS عادي — دون إطار عمل للواجهة.
 

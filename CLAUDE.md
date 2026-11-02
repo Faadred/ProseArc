@@ -25,7 +25,7 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
 - The GitHub user was renamed **FEzio78 → Faadred** on 2026-11-02. The remote here now points to
   `Faadred/ProseArc`, and this repo's commits use the noreply e-mail `31814579+Faadred@users.noreply.github.com`
   (set 2026-11-02; older commits carry the personal address, already public).
-- `package.json` → `build.publish.owner` still says `FEzio78`: change it to `Faadred` in the next release.
+- `package.json` → `build.publish.owner` is `Faadred` (changed for 1.4.0 on `feat/redesign`).
   Installed copies up to 1.3.0 look for updates at `FEzio78/ProseArc` and work only through GitHub's redirect, so
   the old name must never host a `ProseArc` repo (the user holds the name with an empty `FEzio78` organization).
 - Test books are private: `*.pdf` is git-ignored (a commercial novel sits in the folder for testing). Never
@@ -82,7 +82,8 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
   decides when). Commits: redesign (cfe7375, 34bce66), Setup (3afac1d), built-in llama.cpp (6ff7ed3),
   Hugging Face models (1364b01), Providers + encrypted keys (cc59fb4), then Setup switch/skip, neutral provider
   wording and this README/notes update. Next: the user tests the branch (`start.bat`), then **step 6, release**.
-- Before release (step 6): bump the version; `build.publish.owner` → `Faadred`; remake the README screenshots
+- Step 6 so far: version 1.4.0, `build.publish.owner` → `Faadred`, README intro updated, release notes
+  drafted in `RELEASE_NOTES_v1.4.0.md` (untracked; SHA-256 filled in after `npm run dist`). Still to do: remake the README screenshots
   from a public-domain or made-up book (they still show the old look); release notes in the user's format (see
   memory); `npm run dist` now fetches the engine first.
 - Not tested yet: a full translation with a real cloud key (no keys used; LM Studio, Groq 401 and the Hugging

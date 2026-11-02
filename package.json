@@ -1,6 +1,6 @@
 {
   "name": "prosearc",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A human-in-the-loop translation workspace for novels, powered by a local AI model.",
   "main": "main.js",
   "author": "ProseArc",
@@ -41,7 +41,7 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "FEzio78",
+      "owner": "Faadred",
       "repo": "ProseArc"
     },
     "win": {
