@@ -22,6 +22,39 @@ function toast(message, kind = 'info') {
   setTimeout(close, kind === 'error' ? 6000 : 3200);
 }
 
+// In-app yes/no dialog. Resolves true when confirmed. danger = red button.
+function askConfirm({ title, body = '', ok, danger = false }) {
+  return new Promise((resolve) => {
+    const modal = $('#confirm-modal');
+    $('#cf-title').textContent = title;
+    $('#cf-body').textContent = body;
+    $('#cf-body').hidden = !body;
+    $('#cf-icon').innerHTML = icon(danger ? 'trash-2' : 'circle-alert');
+    $('#cf-icon').classList.toggle('danger', danger);
+    const okBtn = $('#cf-ok');
+    okBtn.textContent = ok || t('common.ok');
+    okBtn.className = `btn ${danger ? 'btn-danger-solid' : 'btn-primary'}`;
+    const prevFocus = document.activeElement;
+    const done = (val) => {
+      modal.classList.remove('open');
+      okBtn.onclick = null; $('#cf-cancel').onclick = null; modal.onclick = null;
+      document.removeEventListener('keydown', onKey, true);
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+      resolve(val);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); done(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); }
+    };
+    okBtn.onclick = () => done(true);
+    $('#cf-cancel').onclick = () => done(false);
+    modal.onclick = (e) => { if (e.target === modal) done(false); };
+    document.addEventListener('keydown', onKey, true);
+    modal.classList.add('open');
+    (danger ? $('#cf-cancel') : okBtn).focus(); // the safe choice has focus for risky actions
+  });
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -196,7 +229,7 @@ function bookMenuItems(id, { withRemoveCover = false } = {}) {
 }
 
 async function deleteBook(p) {
-  if (!confirm(t('confirm.delete', { name: p.name }))) return;
+  if (!await askConfirm({ title: t('confirm.deleteTitle', { name: p.name }), body: t('confirm.deleteBody'), ok: t('card.delete'), danger: true })) return;
   await window.api.deleteProject(p.id);
   if (currentProject && currentProject.id === p.id) {
     currentProject = null;
@@ -467,7 +500,7 @@ function clearError() {
 function setEngineRunning(on) {
   isRunning = on;
   const btn = $('#ws-run');
-  btn.textContent = on ? t('ws.stop') : t('ws.start');
+  btn.innerHTML = `${icon(on ? 'square' : 'play')}<span>${escapeHtml(t(on ? 'ws.stop' : 'ws.start'))}</span>`;
   btn.classList.toggle('btn-stop', on);
   // Lock settings while a run is in progress.
   ['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider']
@@ -477,7 +510,10 @@ function setEngineRunning(on) {
   ['#rv-retrans-seg', '#rv-prev', '#rv-next', '#rv-save', '#rv-review-all', '#rv-fr']
     .forEach((sel) => { const el = $(sel); if (el) el.disabled = on; });
   const all = $('#rv-retrans-all');
-  if (all) { all.textContent = on ? t('rv.stop') : t('rv.all'); all.classList.toggle('btn-stop', on); }
+  if (all) {
+    all.innerHTML = `${icon(on ? 'square' : 'refresh-cw')}<span>${escapeHtml(t(on ? 'rv.stop' : 'rv.all'))}</span>`;
+    all.classList.toggle('btn-stop', on);
+  }
 }
 
 async function toggleRun() {
@@ -501,7 +537,7 @@ async function runConnectionTest(url, out) {
   out.textContent = t('test.testing');
   const r = await window.api.testConnection((url || '').trim());
   out.className = 'test-result ' + (r.ok ? 'ok' : 'bad');
-  out.textContent = (r.ok ? '✓ ' : '✕ ') + t('test.' + r.code, r.params);
+  out.innerHTML = `${icon(r.ok ? 'circle-check' : 'circle-alert')}<span>${escapeHtml(t('test.' + r.code, r.params))}</span>`;
 }
 $('#ws-test').addEventListener('click', () => runConnectionTest($('#ws-url').value, $('#ws-test-result')));
 
@@ -546,7 +582,7 @@ async function doExport() {
 
 // The Workspace's secondary button exports the current project.
 function updatePrimaryAction() {
-  $('#ws-export').textContent = t('ws.export');
+  // The Export label is a data-i18n span now; nothing dynamic left here.
 }
 
 $('#ws-export').addEventListener('click', openExportModal);
@@ -749,7 +785,7 @@ function renderNavWindow() {
     row.innerHTML =
       `<span class="num">${idx + 1}</span>` +
       `<span class="dot ${statusClass(seg.status)}"></span>` +
-      `<span class="snippet">${typeTag}${snippet}</span>`;
+      `<span class="snippet" dir="auto">${typeTag}${snippet}</span>`;
     row.addEventListener('click', () => selectSegment(idx));
     frag.appendChild(row);
   }
@@ -1031,7 +1067,7 @@ document.addEventListener('keydown', (e) => {
 async function retranslateCurrent() {
   if (!currentProject || isRunning) return;
   const seg = currentProject.segments[reviewIndex];
-  if (seg.status === 'reviewed' && !confirm(t('confirm.retransReviewed'))) return;
+  if (seg.status === 'reviewed' && !await askConfirm({ title: t('confirm.retransTitle'), body: t('confirm.retransReviewed'), ok: t('confirm.retransOk') })) return;
   if (reviewDirty) await persistCurrent(false);
   setEngineRunning(true);
   await window.api.retranslateSegment(currentProject.id, seg.id);
@@ -1072,7 +1108,7 @@ async function markAllReviewed() {
     (s) => s.translation && s.translation.trim() && s.status !== 'reviewed'
   ).length;
   if (n === 0) { toast(t('toast.nothingMark')); return; }
-  if (!confirm(t('confirm.markAll', { n }))) return;
+  if (!await askConfirm({ title: t('confirm.markAllTitle'), body: t('confirm.markAll', { n }), ok: t('rv.reviewAll') })) return;
   if (reviewDirty) await persistCurrent(false);
   await window.api.markAllReviewed(currentProject.id);
   currentProject = await window.api.getProject(currentProject.id);
@@ -1253,7 +1289,7 @@ function renderTermList(name) {
       `<input class="js-src" type="text" value="${escapeHtml(term.source)}" />` +
       `<span class="arrow">→</span>` +
       `<input class="js-tgt" type="text" value="${escapeHtml(term.target)}" />` +
-      `<button class="js-del" title="Delete">✕</button>`;
+      `<button class="js-del" title="${escapeHtml(t('common.delete'))}">${icon('trash-2')}</button>`;
     row.querySelector('.js-tgt').dir = rtl ? 'rtl' : 'auto';
     row.querySelector('.js-src').addEventListener('change', (e) => editTerm(name, term.id, 'source', e.target.value));
     row.querySelector('.js-tgt').addEventListener('change', (e) => editTerm(name, term.id, 'target', e.target.value));
@@ -1364,7 +1400,7 @@ function renderSuggestions() {
       `<input class="js-stgt" type="text" placeholder="${escapeHtml(t('gloss.suggestTgtPh'))}" />` +
       `<button class="btn btn-primary btn-sm js-add-book">${escapeHtml(t('gloss.addBook'))}</button>` +
       `<button class="btn btn-ghost btn-sm js-add-shared">${escapeHtml(t('gloss.addShared'))}</button>` +
-      `<button class="js-dismiss" title="${escapeHtml(t('gloss.dismiss'))}">✕</button>`;
+      `<button class="js-dismiss" title="${escapeHtml(t('gloss.dismiss'))}">${icon('x')}</button>`;
     const tgt = row.querySelector('.js-stgt');
     tgt.dir = rtl ? 'rtl' : 'auto';
     row.querySelector('.js-add-book').addEventListener('click', () => addSuggestion('project', it.text, tgt.value));
@@ -1436,6 +1472,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('theme', theme);
   updateThemeLabel();
+  if (typeof syncSegmented === 'function') syncSegmented();
 }
 $('#theme-toggle').addEventListener('click', () => {
   applyTheme(currentTheme() === 'light' ? 'dark' : 'light');
@@ -1485,8 +1522,7 @@ async function renderSettings() {
   $('#set-test-result').className = 'test-result';
   applyProviderVisibility(s.provider || 'local', '#set-url-field', null);
   // Appearance reflects the current device state.
-  $('#set-theme').value = currentTheme();
-  $('#set-lang').value = getLang();
+  syncSegmented();
   // API keys.
   const sec = await window.api.getSecrets();
   $('#key-openai').value = sec.openai || '';
@@ -1525,8 +1561,24 @@ $('#set-provider').addEventListener('change', (e) =>
 ['#key-openai', '#key-openrouter', '#key-gemini', '#key-anthropic', '#key-compatible', '#key-compatible-base']
   .forEach((sel) => $(sel).addEventListener('change', saveSecretsForm));
 $('#set-test').addEventListener('click', () => runConnectionTest($('#set-url').value, $('#set-test-result')));
-$('#set-theme').addEventListener('change', (e) => applyTheme(e.target.value));
-$('#set-lang').addEventListener('change', (e) => setLang(e.target.value));
+// Two-option toggles for theme and language.
+function syncSegmented() {
+  const mark = (sel, val) => $$(`${sel} button`).forEach((b) => {
+    const on = b.dataset.value === val;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  mark('#set-theme', currentTheme());
+  mark('#set-lang', getLang());
+}
+$('#set-theme').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-value]');
+  if (b) { applyTheme(b.dataset.value); syncSegmented(); }
+});
+$('#set-lang').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-value]');
+  if (b && b.dataset.value !== getLang()) setLang(b.dataset.value);
+});
 
 // Language fields use a <datalist>, which Chromium filters by the current value.
 // Clear on focus so the whole list shows; restore the previous value if the user
@@ -1562,30 +1614,35 @@ function buildReaderHtml(project) {
   const parts = [];
   let listOpen = null;
   const closeList = () => { if (listOpen) { parts.push(`</${listOpen}>`); listOpen = null; } };
+  // Passages not translated yet show the original, in its own direction.
+  const srcDir = isRtlLang(project.sourceLang) ? 'rtl' : 'ltr';
 
   for (const s of project.segments) {
     const id = s.id;
     const type = s.type || 'paragraph';
     if (type === 'scene-break') { closeList(); parts.push(`<div class="rd-scene" id="rd-seg-${id}" data-seg="${id}">⁂</div>`); continue; }
-    const txt = (s.translation && s.translation.trim()) ? s.translation.trim() : s.original;
+    const done = !!(s.translation && s.translation.trim());
+    const txt = done ? s.translation.trim() : s.original;
     if (!txt) continue;
     const html = inlineMd(txt);
+    const at = `id="rd-seg-${id}" data-seg="${id}"` + (done ? '' : ` dir="${srcDir}"`);
+    const un = done ? '' : ' rd-untranslated';
     if (type === 'list-item') {
       const want = s.ordered ? 'ol' : 'ul';
       if (listOpen !== want) { closeList(); parts.push(`<${want}>`); listOpen = want; }
-      parts.push(`<li id="rd-seg-${id}" data-seg="${id}">${html}</li>`);
+      parts.push(`<li ${at} class="${un.trim()}">${html}</li>`);
       continue;
     }
     closeList();
     if (type === 'heading') {
       const lvl = Math.min(Math.max(s.level || 2, 1), 6);
-      parts.push(`<h${lvl} class="rd-h" id="rd-seg-${id}" data-seg="${id}">${html}</h${lvl}>`);
+      parts.push(`<h${lvl} class="rd-h${un}" ${at}>${html}</h${lvl}>`);
     } else if (type === 'blockquote') {
-      parts.push(`<blockquote id="rd-seg-${id}" data-seg="${id}">${html}</blockquote>`);
+      parts.push(`<blockquote ${at} class="${un.trim()}">${html}</blockquote>`);
     } else if (type === 'verse') {
-      parts.push(`<p class="rd-verse" id="rd-seg-${id}" data-seg="${id}">${html.replace(/\n/g, '<br/>')}</p>`);
+      parts.push(`<p class="rd-verse${un}" ${at}>${html.replace(/\n/g, '<br/>')}</p>`);
     } else {
-      parts.push(`<p id="rd-seg-${id}" data-seg="${id}">${html}</p>`);
+      parts.push(`<p ${at} class="${un.trim()}">${html}</p>`);
     }
   }
   closeList();
@@ -1758,15 +1815,15 @@ function renderBookmarks() {
   const pid = currentProject ? currentProject.id : null;
   const arr = (pid ? getBookmarks(pid) : []).slice().sort((a, b) => Number(a.seg) - Number(b.seg));
   let html = `<div class="rd-marks-head"><span>${escapeHtml(t('reader.bookmarks'))}</span>` +
-    `<button class="btn btn-ghost btn-sm" id="rd-mark-add">${escapeHtml(t('reader.addMark'))}</button></div>`;
+    `<button class="btn btn-ghost btn-sm" id="rd-mark-add">${icon('plus')}${escapeHtml(t('reader.addMark'))}</button></div>`;
   if (arr.length === 0) {
     html += `<div class="rd-marks-empty">${escapeHtml(t('reader.noMarks'))}</div>`;
   } else {
     html += arr.map((b) => {
       const label = b.note ? `“${b.note}”` : segSnippet(b.seg);
-      const icon = b.note ? '✎ ' : '';
-      return `<div class="rd-mark-row" data-go="${b.seg}"><span class="rd-mark-label">${icon}${escapeHtml(label)}</span>` +
-        `<button class="rd-mark-del" data-del="${b.seg}" title="${escapeHtml(t('reader.removeMark'))}">✕</button></div>`;
+      const noteIcon = b.note ? icon('sticky-note') : '';
+      return `<div class="rd-mark-row" data-go="${b.seg}"><span class="rd-mark-label">${noteIcon}${escapeHtml(label)}</span>` +
+        `<button class="rd-mark-del" data-del="${b.seg}" title="${escapeHtml(t('reader.removeMark'))}">${icon('x')}</button></div>`;
     }).join('');
   }
   wrap.innerHTML = html;

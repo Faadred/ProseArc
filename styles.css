@@ -1176,3 +1176,107 @@ textarea.pane-body {
 }
 .prov[open] > summary::after { transform: rotate(180deg); }
 .prov .field { padding: 0 13px 13px; margin: 0; }
+
+/* ============================================================================
+   Polish round 2: dialogs, toggles, icon buttons, Workspace + Settings layout
+   ========================================================================== */
+
+/* Panel titles carry an icon. */
+.panel-title { display: flex; align-items: center; gap: var(--s-2); }
+.panel-title .icon { width: 18px; height: 18px; color: var(--accent); }
+
+/* Workspace: book + model panels on the left, the activity log fills the right. */
+#view-workspace .ws-grid { grid-template-columns: minmax(340px, 1fr) minmax(360px, 1fr); align-items: stretch; }
+.ws-col { display: flex; flex-direction: column; gap: var(--s-5); }
+.ws-activity { display: flex; flex-direction: column; min-height: 420px; }
+.ws-activity .log { flex: 1; height: auto; min-height: 300px; }
+@media (min-width: 1081px) {
+  .ws-activity { position: sticky; top: 0; max-height: calc(100vh - 230px); }
+}
+
+/* Settings: defaults on the left; appearance and keys stacked on the right. */
+.settings-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-5); align-items: start; grid-auto-flow: dense;
+}
+.settings-grid > :first-child { grid-row: span 2; }
+@media (max-width: 1080px) { .settings-grid { grid-template-columns: 1fr; } .settings-grid > :first-child { grid-row: auto; } }
+
+/* Two-option toggle (theme, language). */
+.segmented {
+  display: inline-flex; padding: 3px; gap: 3px;
+  background: var(--field); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.segmented button {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  padding: 8px 16px; border: none; border-radius: var(--r-sm);
+  background: transparent; color: var(--muted);
+  font-family: var(--font-ui); font-size: 0.95rem; font-weight: 500; cursor: pointer;
+  transition: background var(--ease), color var(--ease);
+}
+.segmented button[lang="ar"] { font-family: 'Amiri', var(--font-ui); font-size: 1.05rem; }
+.segmented button .icon { width: 16px; height: 16px; }
+.segmented button:hover { color: var(--text); }
+.segmented button.active { background: var(--surface-3); color: var(--text); box-shadow: var(--shadow-sm); }
+.segmented button.active .icon { color: var(--accent); }
+
+/* API key rows: a real chevron, no text glyphs. */
+.prov > summary::before { content: none; }
+.prov > summary::after {
+  content: ''; width: 16px; height: 16px; background: var(--muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.prov { transition: border-color var(--ease); }
+.prov:hover { border-color: color-mix(in srgb, var(--muted) 40%, transparent); }
+.prov[open] { background: var(--surface-2); }
+
+/* Connection test result with an icon. */
+.test-result { display: inline-flex; align-items: flex-start; gap: 6px; }
+.test-result .icon { width: 16px; height: 16px; margin-top: 2px; }
+
+/* Small grouped icon buttons (reader text size). */
+.btn-group { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.btn-group .icon-btn { width: 34px; height: 32px; border-radius: 0; }
+.btn-group .icon-btn:first-child { border-start-start-radius: var(--radius-sm); border-end-start-radius: var(--radius-sm); }
+.btn-group .icon-btn:last-child { border-start-end-radius: var(--radius-sm); border-end-end-radius: var(--radius-sm); }
+.rd-controls select { padding: 7px 10px; background: var(--surface); border-color: var(--line); }
+.btn-sm .icon { width: 15px; height: 15px; }
+
+/* Row delete / dismiss / gutter buttons hold SVGs now. */
+.glossary-row .js-del, .suggest-row .js-dismiss, .rd-mark-del, .gloss-pop-head .gp-close {
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.glossary-row .js-del .icon, .suggest-row .js-dismiss .icon { width: 17px; height: 17px; }
+.rd-mark-del .icon, .gloss-pop-head .gp-close .icon { width: 14px; height: 14px; }
+.rd-gutter-btn .icon { width: 15px; height: 15px; }
+.rd-gutter-btn.on .icon { fill: currentColor; }
+.rd-mark-label .icon { width: 13px; height: 13px; margin-inline-end: 5px; color: var(--accent); }
+.gp-title { display: inline-flex; align-items: center; gap: 6px; }
+.gp-title .icon { width: 14px; height: 14px; }
+
+/* ---- Dialogs ------------------------------------------------------------- */
+.modal-backdrop { background: rgba(12, 11, 16, 0.55); backdrop-filter: blur(3px); }
+.modal-backdrop.open .modal { animation: modal-in 160ms ease-out; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.modal { border-radius: var(--r-xl); padding: var(--s-6); }
+.modal-confirm { width: min(440px, 92vw); display: grid; grid-template-columns: auto 1fr; gap: 0 var(--s-4); }
+.modal-confirm .modal-actions { grid-column: 1 / -1; }
+.modal-confirm h2 { font-family: var(--font-ui); font-size: 1.15rem; font-weight: 600; margin: 4px 0 6px; }
+.modal-confirm .modal-sub { margin: 0; line-height: 1.5; }
+.cf-icon {
+  width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.cf-icon.danger { background: var(--danger-soft); color: var(--danger); }
+.cf-icon .icon { width: 21px; height: 21px; }
+.btn-danger-solid { background: var(--danger); color: #fff; font-weight: 600; }
+.btn-danger-solid:hover { filter: brightness(1.08); }
+[data-theme="light"] .btn-danger-solid { color: #fff; }
+
+/* Reader: passages not translated yet (shown in the original, its own direction). */
+.rd-content .rd-untranslated { opacity: 0.55; text-align: start; }
+
+/* Mixed-direction text: each passage aligns by its own direction, not the UI's. */
+#rv-original, #rv-translation, .nav-item-row .snippet { text-align: start; }
+.log-line { unicode-bidi: plaintext; text-align: start; }

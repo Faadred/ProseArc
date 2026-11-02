@@ -122,8 +122,8 @@
             <p class="lede" id="ws-langs"></p>
           </div>
           <div class="head-actions">
-            <button class="btn btn-ghost" id="ws-export">Export…</button>
-            <button class="btn btn-primary" id="ws-run" data-i18n="ws.start">Start translating</button>
+            <button class="btn btn-ghost" id="ws-export"><i data-icon="download"></i><span data-i18n="ws.export">Export…</span></button>
+            <button class="btn btn-primary" id="ws-run"><i data-icon="play"></i><span data-i18n="ws.start">Start translating</span></button>
           </div>
         </div>
 
@@ -134,67 +134,74 @@
         </div>
 
         <div class="ws-grid">
-          <!-- Settings -->
-          <div class="panel">
-            <h3 class="panel-title" data-i18n="settings.title">Settings</h3>
-            <div class="field">
-              <label for="ws-name" data-i18n="f.name">Project name</label>
-              <input id="ws-name" type="text" />
-            </div>
-            <div class="field-row">
+          <div class="ws-col">
+            <!-- The book: name, languages, style -->
+            <div class="panel">
+              <h3 class="panel-title"><i data-icon="book-open"></i><span data-i18n="ws.bookPanel">Book</span></h3>
               <div class="field">
-                <label for="ws-source" data-i18n="f.source">Source language</label>
-                <input id="ws-source" type="text" list="lang-list" />
+                <label for="ws-name" data-i18n="f.name">Project name</label>
+                <input id="ws-name" type="text" />
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="ws-source" data-i18n="f.source">Source language</label>
+                  <input id="ws-source" type="text" list="lang-list" />
+                </div>
+                <div class="field">
+                  <label for="ws-target" data-i18n="f.target">Target language</label>
+                  <input id="ws-target" type="text" list="lang-list" />
+                </div>
               </div>
               <div class="field">
-                <label for="ws-target" data-i18n="f.target">Target language</label>
-                <input id="ws-target" type="text" list="lang-list" />
+                <label for="ws-style"><span data-i18n="f.style">Translation style</span>
+                  <span class="hint" data-i18n="f.styleOpt">(optional)</span></label>
+                <textarea id="ws-style" rows="3" data-i18n-ph="f.stylePh"
+                  placeholder="e.g. Formal classical Arabic; keep an intimate, lyrical tone; address the reader formally."></textarea>
+                <p class="settings-note" data-i18n="f.styleHint">A short brief sent with every segment — tone, formality, audience.</p>
               </div>
             </div>
-            <div class="field">
-              <label for="ws-provider" data-i18n="f.provider">Provider</label>
-              <select id="ws-provider">
-                <option value="local" data-i18n="prov.local">Local (LM Studio)</option>
-                <option value="openai">OpenAI</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="gemini">Gemini</option>
-                <option value="anthropic" data-i18n="prov.anthropic">Claude (Anthropic)</option>
-                <option value="compatible" data-i18n="prov.compatible">OpenAI‑compatible</option>
-              </select>
-              <p class="settings-note" id="ws-provider-note" data-i18n="f.providerKeyNote">Set this provider's API key in Settings → API keys.</p>
-            </div>
-            <div class="field" id="ws-url-field">
-              <label for="ws-url" data-i18n="f.url">Local API URL</label>
-              <input id="ws-url" type="text" />
-              <div class="test-row">
-                <button class="btn btn-ghost btn-sm" id="ws-test" data-i18n="ws.test">Test connection</button>
-                <span class="test-result" id="ws-test-result"></span>
-              </div>
-            </div>
-            <div class="field-row">
+
+            <!-- The AI that translates it -->
+            <div class="panel">
+              <h3 class="panel-title"><i data-icon="sparkles"></i><span data-i18n="ws.modelPanel">AI model</span></h3>
               <div class="field">
-                <label for="ws-model"><span data-i18n="f.model">Model name</span>
-                  <span class="hint" data-i18n="f.modelOpt">(optional)</span></label>
-                <input id="ws-model" type="text" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
+                <label for="ws-provider" data-i18n="f.provider">Provider</label>
+                <select id="ws-provider">
+                  <option value="local" data-i18n="prov.local">Local (LM Studio)</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="anthropic" data-i18n="prov.anthropic">Claude (Anthropic)</option>
+                  <option value="compatible" data-i18n="prov.compatible">OpenAI‑compatible</option>
+                </select>
+                <p class="settings-note" id="ws-provider-note" data-i18n="f.providerKeyNote">Set this provider's API key in Settings → API keys.</p>
               </div>
-              <div class="field" style="max-width:140px">
-                <label for="ws-context" data-i18n="f.context">Context window</label>
-                <input id="ws-context" type="number" min="0" max="10" />
+              <div class="field" id="ws-url-field">
+                <label for="ws-url" data-i18n="f.url">Local API URL</label>
+                <input id="ws-url" type="text" />
+                <div class="test-row">
+                  <button class="btn btn-ghost btn-sm" id="ws-test"><i data-icon="check"></i><span data-i18n="ws.test">Test connection</span></button>
+                  <span class="test-result" id="ws-test-result"></span>
+                </div>
               </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="ws-model"><span data-i18n="f.model">Model name</span>
+                    <span class="hint" data-i18n="f.modelOpt">(optional)</span></label>
+                  <input id="ws-model" type="text" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
+                </div>
+                <div class="field" style="max-width:140px">
+                  <label for="ws-context" data-i18n="f.context">Context window</label>
+                  <input id="ws-context" type="number" min="0" max="10" />
+                </div>
+              </div>
+              <p class="settings-note" data-i18n="settings.note">Changes save automatically.</p>
             </div>
-            <div class="field">
-              <label for="ws-style"><span data-i18n="f.style">Translation style</span>
-                <span class="hint" data-i18n="f.styleOpt">(optional)</span></label>
-              <textarea id="ws-style" rows="3" data-i18n-ph="f.stylePh"
-                placeholder="e.g. Formal classical Arabic; keep an intimate, lyrical tone; address the reader formally."></textarea>
-              <p class="settings-note" data-i18n="f.styleHint">A short brief sent with every segment — tone, formality, audience.</p>
-            </div>
-            <p class="settings-note" data-i18n="settings.note">Changes save automatically.</p>
           </div>
 
           <!-- Live activity log -->
-          <div class="panel">
-            <h3 class="panel-title" data-i18n="activity.title">Activity</h3>
+          <div class="panel ws-activity">
+            <h3 class="panel-title"><i data-icon="list"></i><span data-i18n="activity.title">Activity</span></h3>
             <div class="log" id="ws-log">
               <div class="log-line muted" data-i18n="activity.ready">Ready. Press “Start translating” when LM Studio is running.</div>
             </div>
@@ -239,14 +246,14 @@
               <input class="ed-search" id="rv-search" type="text" data-i18n-ph="rv.search" placeholder="Search…" />
               <div class="ed-actions">
                 <span id="rv-saved" class="ed-saved"></span>
-                <button class="btn btn-ghost btn-sm" id="rv-fr" data-i18n="fr.open">⇄ Replace</button>
-                <button class="btn btn-ghost btn-sm" id="rv-retrans-all" data-i18n="rv.all">↻ All</button>
-                <button class="btn btn-ghost btn-sm" id="rv-retrans-seg" data-i18n="rv.segment">↻ Segment</button>
+                <button class="btn btn-ghost btn-sm" id="rv-fr"><i data-icon="arrow-left-right"></i><span data-i18n="fr.open">Replace</span></button>
+                <button class="btn btn-ghost btn-sm" id="rv-retrans-all"><i data-icon="refresh-cw"></i><span data-i18n="rv.all">Redo all</span></button>
+                <button class="btn btn-ghost btn-sm" id="rv-retrans-seg"><i data-icon="refresh-cw"></i><span data-i18n="rv.segment">Redo segment</span></button>
                 <span class="ed-divider"></span>
-                <button class="btn btn-ghost btn-sm" id="rv-prev" data-i18n="rv.prev">↑ Prev</button>
-                <button class="btn btn-ghost btn-sm" id="rv-next" data-i18n="rv.next">Next ↓</button>
-                <button class="btn btn-ghost btn-sm" id="rv-review-all" data-i18n="rv.reviewAll">✓ All reviewed</button>
-                <button class="btn btn-primary btn-sm" id="rv-save" data-i18n="rv.save">Save &amp; mark reviewed</button>
+                <button class="btn btn-ghost btn-sm" id="rv-prev"><i data-icon="arrow-up"></i><span data-i18n="rv.prev">Previous</span></button>
+                <button class="btn btn-ghost btn-sm" id="rv-next"><i data-icon="arrow-down"></i><span data-i18n="rv.next">Next</span></button>
+                <button class="btn btn-ghost btn-sm" id="rv-review-all"><i data-icon="check-check"></i><span data-i18n="rv.reviewAll">Mark all reviewed</span></button>
+                <button class="btn btn-primary btn-sm" id="rv-save"><i data-icon="check"></i><span data-i18n="rv.save">Save &amp; mark reviewed</span></button>
               </div>
             </div>
 
@@ -276,19 +283,21 @@
       <div id="reader-panel" hidden>
         <div class="rd-bar">
           <div class="rd-bar-left">
-            <button class="btn btn-ghost btn-sm" id="rd-toc-btn" data-i18n="reader.contents">☰ Contents</button>
-            <button class="btn btn-ghost btn-sm" id="rd-marks-btn" data-i18n="reader.bookmarks">🔖 Bookmarks</button>
+            <button class="btn btn-ghost btn-sm" id="rd-toc-btn"><i data-icon="list"></i><span data-i18n="reader.contents">Contents</span></button>
+            <button class="btn btn-ghost btn-sm" id="rd-marks-btn"><i data-icon="bookmark"></i><span data-i18n="reader.bookmarks">Bookmarks</span></button>
             <span class="rd-title" id="rd-title"></span>
           </div>
           <div class="rd-controls">
-            <button class="btn btn-ghost btn-sm" id="rd-bilingual" data-i18n="reader.bilingual">Bilingual</button>
+            <button class="btn btn-ghost btn-sm" id="rd-bilingual"><i data-icon="columns-2"></i><span data-i18n="reader.bilingual">Bilingual</span></button>
             <select id="rd-font" title="Font">
               <option value="serif" data-i18n="reader.fSerif">Serif</option>
               <option value="amiri">Amiri</option>
               <option value="sans" data-i18n="reader.fSans">Sans</option>
             </select>
-            <button class="btn btn-ghost btn-sm" id="rd-smaller" title="Smaller">A−</button>
-            <button class="btn btn-ghost btn-sm" id="rd-bigger" title="Bigger">A+</button>
+            <span class="btn-group">
+              <button class="icon-btn" id="rd-smaller" data-i18n-title="reader.smaller" title="Smaller text"><i data-icon="a-arrow-down"></i></button>
+              <button class="icon-btn" id="rd-bigger" data-i18n-title="reader.bigger" title="Bigger text"><i data-icon="a-arrow-up"></i></button>
+            </span>
             <select id="rd-width" title="Width">
               <option value="narrow" data-i18n="reader.wNarrow">Narrow</option>
               <option value="medium" data-i18n="reader.wMedium">Medium</option>
@@ -311,8 +320,8 @@
             <div class="rd-content" id="rd-content">
               <div class="rd-flow" id="rd-flow"></div>
               <div class="rd-gutter" id="rd-gutter" hidden>
-                <button class="rd-gutter-btn" id="rd-g-mark" title="Bookmark">★</button>
-                <button class="rd-gutter-btn" id="rd-g-note" title="Note">✎</button>
+                <button class="rd-gutter-btn" id="rd-g-mark" data-i18n-title="reader.mark" title="Bookmark"><i data-icon="star"></i></button>
+                <button class="rd-gutter-btn" id="rd-g-note" data-i18n-title="reader.note" title="Note"><i data-icon="sticky-note"></i></button>
               </div>
               <div class="rd-note-pop" id="rd-note-pop" hidden>
                 <textarea id="rd-note-text" rows="3" data-i18n-ph="reader.notePh" placeholder="Note on this paragraph…"></textarea>
@@ -381,10 +390,10 @@
         </div>
       </div>
 
-      <div class="ws-grid">
+      <div class="settings-grid">
         <!-- Defaults for new projects -->
         <div class="panel">
-          <h3 class="panel-title" data-i18n="set.defaults">Defaults for new projects</h3>
+          <h3 class="panel-title"><i data-icon="sliders-horizontal"></i><span data-i18n="set.defaults">Defaults for new projects</span></h3>
           <div class="field-row">
             <div class="field">
               <label for="set-source" data-i18n="f.source">Source language</label>
@@ -410,7 +419,7 @@
             <label for="set-url" data-i18n="f.url">Local API URL</label>
             <input id="set-url" type="text" />
             <div class="test-row">
-              <button class="btn btn-ghost btn-sm" id="set-test" data-i18n="ws.test">Test connection</button>
+              <button class="btn btn-ghost btn-sm" id="set-test"><i data-icon="check"></i><span data-i18n="ws.test">Test connection</span></button>
               <span class="test-result" id="set-test-result"></span>
             </div>
           </div>
@@ -430,27 +439,27 @@
 
         <!-- Appearance -->
         <div class="panel">
-          <h3 class="panel-title" data-i18n="set.appearance">Appearance</h3>
+          <h3 class="panel-title"><i data-icon="palette"></i><span data-i18n="set.appearance">Appearance</span></h3>
           <div class="field">
-            <label for="set-theme" data-i18n="set.theme">Theme</label>
-            <select id="set-theme">
-              <option value="dark" data-i18n="theme.dark">Dark</option>
-              <option value="light" data-i18n="theme.light">Light</option>
-            </select>
+            <label data-i18n="set.theme">Theme</label>
+            <div class="segmented" id="set-theme" role="radiogroup">
+              <button role="radio" data-value="dark"><i data-icon="moon"></i><span data-i18n="theme.dark">Dark</span></button>
+              <button role="radio" data-value="light"><i data-icon="sun"></i><span data-i18n="theme.light">Light</span></button>
+            </div>
           </div>
           <div class="field">
-            <label for="set-lang" data-i18n="set.language">Interface language</label>
-            <select id="set-lang">
-              <option value="en">English</option>
-              <option value="ar">العربية</option>
-            </select>
+            <label data-i18n="set.language">Interface language</label>
+            <div class="segmented" id="set-lang" role="radiogroup">
+              <button role="radio" data-value="en">English</button>
+              <button role="radio" data-value="ar" lang="ar">العربية</button>
+            </div>
           </div>
           <p class="settings-note" data-i18n="set.appearanceNote">Appearance is saved on this device.</p>
         </div>
 
         <!-- API keys (cloud providers) -->
         <div class="panel">
-          <h3 class="panel-title" data-i18n="set.keys">API keys</h3>
+          <h3 class="panel-title"><i data-icon="key-round"></i><span data-i18n="set.keys">API keys</span></h3>
           <p class="settings-note" data-i18n="set.keysNote">For cloud providers. Stored only on this device — never in projects or exports.</p>
           <details class="prov">
             <summary>OpenAI</summary>
@@ -575,6 +584,21 @@
     </div>
   </div>
 
+  <!-- Confirm dialog (replaces window.confirm, which looks foreign and can't be styled) -->
+  <div class="modal-backdrop" id="confirm-modal">
+    <div class="modal modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="cf-title" aria-describedby="cf-body">
+      <div class="cf-icon" id="cf-icon"></div>
+      <div class="cf-text">
+        <h2 id="cf-title"></h2>
+        <p class="modal-sub" id="cf-body"></p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="cf-cancel" data-i18n="np.cancel">Cancel</button>
+        <button class="btn btn-primary" id="cf-ok"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- Find & replace across translations -->
   <div class="modal-backdrop" id="fr-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fr-title">
@@ -600,8 +624,8 @@
   <!-- Highlight-to-glossary popup (appears when you select text in the original) -->
   <div class="gloss-pop" id="gloss-pop" hidden>
     <div class="gloss-pop-head" id="gloss-pop-head">
-      <span data-i18n="gloss.popHead">⋮⋮ Add to glossary</span>
-      <button class="gp-close" id="gloss-pop-close" title="Close">✕</button>
+      <span class="gp-title"><i data-icon="grip-horizontal"></i><span data-i18n="gloss.popHead">Add to glossary</span></span>
+      <button class="gp-close" id="gloss-pop-close" data-i18n-title="common.close" title="Close"><i data-icon="x"></i></button>
     </div>
     <div class="gloss-pop-src" id="gloss-pop-src"></div>
     <input id="gloss-pop-tgt" type="text" data-i18n-ph="gloss.popTgtPh" placeholder="Its translation…" />
