@@ -496,7 +496,10 @@
           </div>
           <div class="models-head">
             <h4 class="sub-title" data-i18n="mdl.found">Models found</h4>
-            <button class="btn btn-ghost btn-sm" id="models-rescan"><i data-icon="refresh-cw"></i><span data-i18n="mdl.rescan">Look again</span></button>
+            <span class="models-head-actions">
+              <button class="btn btn-ghost btn-sm" id="models-rescan"><i data-icon="refresh-cw"></i><span data-i18n="mdl.rescan">Look again</span></button>
+              <button class="btn btn-primary btn-sm" id="models-find"><i data-icon="search"></i><span data-i18n="mh.findOnline">Find models online</span></button>
+            </span>
           </div>
           <div class="model-list" id="model-list"></div>
           <p class="settings-note" data-i18n="mdl.untested">Models ProseArc hasn’t been tested with may translate worse, Arabic especially.</p>
@@ -695,6 +698,29 @@
     </div>
   </div>
 
+  <!-- Find models on Hugging Face (models-dialog.js) -->
+  <div class="modal-backdrop" id="mh-modal">
+    <div class="modal mh-modal" role="dialog" aria-modal="true" aria-labelledby="mh-title">
+      <div class="mh-head">
+        <h2 id="mh-title"><i data-icon="search"></i><span data-i18n="mh.title">Find models</span></h2>
+        <button class="icon-btn" id="mh-close" data-i18n-title="common.close" title="Close"><i data-icon="x"></i></button>
+      </div>
+      <div class="mh-search">
+        <input id="mh-q" type="search" autocomplete="off" data-i18n-ph="mh.searchPh" placeholder="Search Hugging Face…" />
+        <div class="mh-chips" id="mh-chips"></div>
+      </div>
+      <div class="mh-cols">
+        <div class="mh-results" id="mh-results"></div>
+        <div class="mh-detail" id="mh-detail"></div>
+      </div>
+      <div class="mh-foot">
+        <span class="mh-note"><i data-icon="info"></i><span data-i18n="mdl.untested">Models ProseArc hasn’t been tested with may translate worse, Arabic especially.</span></span>
+        <span class="mh-dest-line"><span data-i18n="mh.saveTo">Save to:</span> <span id="mh-dest" dir="ltr"></span>
+          <button class="btn btn-ghost btn-sm" id="mh-dest-change"><span data-i18n="mh.change">Change…</span></button></span>
+      </div>
+    </div>
+  </div>
+
   <!-- Keyboard shortcuts (F1) -->
   <div class="modal-backdrop" id="kb-modal">
     <div class="modal kb-modal" role="dialog" aria-modal="true" aria-labelledby="kb-title">
@@ -744,6 +770,7 @@
   <script src="icons.js"></script>
   <script src="i18n.js"></script>
   <script src="renderer.js"></script>
+  <script src="models-dialog.js"></script>
   <script src="setup.js"></script>
 </body>
 </html>

@@ -266,7 +266,8 @@ function suConnectLocal() {
             <select id="su-bmodel">${bModels.map((m) => `<option value="${escapeHtml(m.path)}" ${m.path === su.local.model ? 'selected' : ''}>${escapeHtml(modelLabel(m))}</option>`).join('')}</select>
             ${bm ? `<p class="settings-note fit-note fit-${bm.fit}">${icon(FIT_ICON[bm.fit])}<span>${t('fit.' + bm.fit)}</span></p>` : ''}` : ''}
           <div class="su-drop" id="su-drop">${icon('folder-plus')}<span>${t('su.dropFolder')}</span>
-            <button class="btn btn-ghost btn-sm" id="su-addfolder">${t('mdl.addFolder')}</button></div>
+            <button class="btn btn-ghost btn-sm" id="su-addfolder">${t('mdl.addFolder')}</button>
+            <button class="btn btn-ghost btn-sm" id="su-findmodel">${icon('search')}${t('mh.findOnline')}</button></div>
         </div>` : ''}
     </div>`;
   const rows = su.servers.map((s) => {
@@ -410,6 +411,10 @@ function wireSetupBody(name) {
     on('#su-model', 'change', (e) => { su.local.model = e.target.value; su.test = null; });
     on('#su-bmodel', 'change', (e) => { su.local.model = e.target.value; su.test = null; renderSetup(); });
     on('#su-addfolder', 'click', async (e) => { e.stopPropagation(); await addModelFolder(); await suDetect(true); });
+    on('#su-findmodel', 'click', (e) => {
+      e.stopPropagation();
+      openModelHub({ onDownloaded: async (p) => { su.local.model = p; await suDetect(true); su.local.model = p; renderSetup(); } });
+    });
     const drop = body.querySelector('#su-builtin');
     if (drop) wireFolderDrop(drop, () => suDetect(true));
     on('#su-recheck', 'click', suDetect);

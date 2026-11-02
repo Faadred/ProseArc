@@ -12,6 +12,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { execFile } = require('child_process');
+const { downloadFile } = require('./download');
 
 const REPO = 'ggml-org/llama.cpp';
 const API = `https://api.github.com/repos/${REPO}`;
@@ -57,38 +58,9 @@ function flavourAssets(info, flavour) {
   });
 }
 
-/**
- * Download `url` to `dest`, resuming a partial `dest.part`, then check its
- * SHA-256. onProgress(doneBytes, totalBytes). Throws on mismatch (and deletes).
- */
+/** Download `url` to `dest` (resumable), checked against its SHA-256. onProgress(doneBytes, totalBytes). */
 async function downloadChecked(url, dest, sha256, onProgress = () => {}, signal) {
-  const part = `${dest}.part`;
-  await fsp.mkdir(path.dirname(dest), { recursive: true });
-  let have = 0;
-  try { have = (await fsp.stat(part)).size; } catch { /* fresh */ }
-  const res = await fetch(url, { headers: { 'User-Agent': 'ProseArc', ...(have ? { Range: `bytes=${have}-` } : {}) }, signal, redirect: 'follow' });
-  if (res.status === 416) { have = 0; await fsp.rm(part, { force: true }); return downloadChecked(url, dest, sha256, onProgress, signal); }
-  if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`);
-  if (res.status === 200 && have) { have = 0; } // server ignored Range: start over
-  const total = have + Number(res.headers.get('content-length') || 0);
-  const out = fs.createWriteStream(part, { flags: have ? 'a' : 'w' });
-  let done = have;
-  try {
-    for await (const chunk of res.body) {
-      if (!out.write(chunk)) await new Promise((r) => out.once('drain', r));
-      done += chunk.length;
-      onProgress(done, total);
-    }
-  } finally {
-    await new Promise((r) => out.end(r));
-  }
-  const got = await sha256File(part);
-  if (got !== sha256) {
-    await fsp.rm(part, { force: true });
-    throw new Error(`Checksum mismatch for ${path.basename(dest)}`);
-  }
-  await fsp.rename(part, dest);
-  return dest;
+  return downloadFile({ url, dest, sha256, signal, onProgress: (p) => onProgress(p.done, p.total) });
 }
 
 function sha256File(file) {

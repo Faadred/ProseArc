@@ -55,6 +55,14 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
   `src/models.js` scans the user's model folders recursively for `.gguf` (skips mmproj/split parts), reads the
   GGUF header, rates fit. `src/hardware.js` (GPU + VRAM from the display-adapter registry keys, RAM, CPU),
   `src/local-servers.js` (finds LM Studio / Ollama).
+- Find models (step 4): `src/hub.js` searches Hugging Face (`/api/models?filter=gguf&sort=downloads`, skips gated,
+  private, audio/embedding repos), lists a repo's files (`/tree/main?recursive=true`; skips mmproj/MTP/imatrix,
+  split parts, files without an LFS SHA-256), rates fit, recommends Q4_K_M first. `src/download.js` is the one
+  downloader (models and engine builds): Node `https` (fetch() was ~13x slower on big files), resumable `.part`,
+  SHA-256 while downloading, free-space check. `models-dialog.js` is the Find models window. Downloads go to
+  `<download folder>/<owner>/<repo>/<file>`; the default download folder is the first model folder (the user's
+  real `E:\Ai\lm-studio\models`), so in tests always point the demo profile's `downloadFolder` at a scratch
+  folder first.
 - Data: `%APPDATA%\prosearc\` (`projects\`, `glossary-global.json`, settings, keys, `app-config.json` for
   model folders + engine choice, `engine\`).
 - Providers today: `builtin` (model = path to a .gguf), `local` (LM Studio / Ollama / any OpenAI-compatible URL;

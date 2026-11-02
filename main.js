@@ -21,6 +21,8 @@ const { detectLocalServers } = require('./src/local-servers');
 const { scanModelFolders } = require('./src/models');
 const { createBuiltin } = require('./src/llama');
 const llamaRelease = require('./src/llama-release');
+const hub = require('./src/hub');
+const { downloadFile } = require('./src/download');
 
 let store;  // initialised once the app is ready and userData path is known.
 let engine; // translation engine, created alongside the store.
@@ -367,6 +369,59 @@ function registerIpc() {
     }
   });
   ipcMain.handle('engine:cancel', () => { if (engineDl) engineDl.ac.abort(); });
+
+  // ---- Hugging Face: find and download models -----------------------------
+  // Downloads go to <download folder>/<owner>/<repo>/<file> (LM Studio's
+  // layout), and that folder is added to the model folders so the built-in
+  // translator sees new models at once.
+  let modelDl = null; // { repo, file, ac, progress }
+  async function downloadFolder() {
+    const cfg = await store.getAppConfig();
+    return cfg.downloadFolder || (cfg.modelFolders || [])[0] || path.join(app.getPath('documents'), 'ProseArc Models');
+  }
+  ipcMain.handle('hub:search', async (_e, query) => {
+    try { return { ok: true, results: await hub.searchModels(query || '') }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+  ipcMain.handle('hub:files', async (_e, repo) => {
+    try { return { ok: true, files: await hub.listRepoFiles(repo, await getSystemInfo()) }; }
+    catch (err) { return { ok: false, error: err.message, status: err.status }; }
+  });
+  ipcMain.handle('hub:folder', () => downloadFolder());
+  ipcMain.handle('hub:chooseFolder', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const r = await dialog.showOpenDialog(win, { title: 'Download models to…', properties: ['openDirectory', 'createDirectory'] });
+    if (r.canceled || !r.filePaths.length) return null;
+    await store.saveAppConfig({ downloadFolder: r.filePaths[0] });
+    return r.filePaths[0];
+  });
+  ipcMain.handle('hub:state', () => (modelDl ? { repo: modelDl.repo, file: modelDl.file, progress: modelDl.progress } : null));
+  ipcMain.handle('hub:download', async (_e, { repo, file }) => {
+    if (modelDl) return { ok: false, error: 'busy' };
+    const ac = new AbortController();
+    modelDl = { repo, file: file.path, ac, progress: null };
+    try {
+      const root = await downloadFolder();
+      const dest = path.join(root, ...repo.split('/'), ...file.path.split('/'));
+      const url = `https://huggingface.co/${repo}/resolve/main/${file.path.split('/').map(encodeURIComponent).join('/')}`;
+      await downloadFile({
+        url, dest, sha256: file.sha256, size: file.size, signal: ac.signal,
+        onProgress: (p) => { modelDl.progress = p; sendAll('hub:progress', { repo, file: file.path, ...p }); },
+      });
+      // Make sure the built-in translator looks in the download folder.
+      const cfg = await store.getAppConfig();
+      const folders = cfg.modelFolders || [];
+      const inside = folders.some((f) => path.resolve(dest).toLowerCase().startsWith(path.resolve(f).toLowerCase() + path.sep));
+      if (!inside) await store.saveAppConfig({ modelFolders: [...folders, root] });
+      return { ok: true, path: dest };
+    } catch (err) {
+      return { ok: false, error: err.code || 'failed', message: err.message, needGB: err.needGB };
+    } finally {
+      modelDl = null;
+      sendAll('hub:progress', { repo, file: file.path, phase: 'idle' });
+    }
+  });
+  ipcMain.handle('hub:cancel', () => { if (modelDl) modelDl.ac.abort(); });
 
   // Choose which build runs: { flavour } ('auto' | 'vulkan' | 'cuda12') or { pin: id | null }.
   ipcMain.handle('engine:use', async (_e, choice) => {

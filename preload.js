@@ -59,6 +59,20 @@ contextBridge.exposeInMainWorld('api', {
   engineDownload: (flavour) => ipcRenderer.invoke('engine:download', flavour),
   engineCancel: () => ipcRenderer.invoke('engine:cancel'),
   engineUse: (choice) => ipcRenderer.invoke('engine:use', choice),
+
+  // Hugging Face: find and download models
+  hubSearch: (query) => ipcRenderer.invoke('hub:search', query),
+  hubFiles: (repo) => ipcRenderer.invoke('hub:files', repo),
+  hubFolder: () => ipcRenderer.invoke('hub:folder'),
+  hubChooseFolder: () => ipcRenderer.invoke('hub:chooseFolder'),
+  hubState: () => ipcRenderer.invoke('hub:state'),
+  hubDownload: (repo, file) => ipcRenderer.invoke('hub:download', { repo, file }),
+  hubCancel: () => ipcRenderer.invoke('hub:cancel'),
+  onHubProgress: (callback) => {
+    const listener = (_e, p) => callback(p);
+    ipcRenderer.on('hub:progress', listener);
+    return () => ipcRenderer.removeListener('hub:progress', listener);
+  },
   onEngineProgress: (callback) => {
     const listener = (_e, p) => callback(p);
     ipcRenderer.on('engine:progress', listener);
