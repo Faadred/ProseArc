@@ -1691,3 +1691,11 @@ kbd {
 .pv-model span { overflow-wrap: anywhere; }
 #ws-provider-note { cursor: pointer; color: var(--accent); }
 .pv-badge.bad { background: var(--danger-soft); color: var(--danger); }
+
+/* Setup: switch between this PC and online; plain "Skip for now" link */
+.su-title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.su-title-row h2 { margin-bottom: var(--s-2); }
+.btn-link { background: none; border: none; color: var(--muted); font-family: var(--font-ui); font-size: var(--fs-sm); cursor: pointer; padding: 6px 8px; text-decoration: underline; text-underline-offset: 3px; }
+.btn-link:hover { color: var(--text); }
+.setup-foot #su-skip { margin-inline-start: var(--s-2); }
+.setup-foot #su-next { margin-inline-start: auto; }

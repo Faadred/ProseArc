@@ -86,7 +86,7 @@ async function renderProviders() {
         <span class="pv-logo">${providerLogo(p)}</span>
         <span class="pv-card-text">
           <strong>${escapeHtml(providerName(p))}</strong>
-          <small>${escapeHtml(t('pv.desc.' + p.id))}</small>
+          <small>${escapeHtml(t(p.kind === 'builtin' ? 'pv.where.builtin' : p.kind === 'local' ? 'pv.where.local' : p.kind === 'custom' ? 'pv.where.custom' : 'pv.where.cloud'))}</small>
         </span>
         <span class="pv-card-foot">${badge}
           ${settings.provider === p.id ? `<span class="pv-default">${escapeHtml(t('mdl.isDefault'))}</span>` : ''}</span>

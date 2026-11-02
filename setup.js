@@ -169,6 +169,7 @@ function renderSetup() {
 
   // Footer
   $('#su-back').hidden = su.step === 0 || name === 'done';
+  $('#su-skip').hidden = name === 'done';
   document.querySelector('.setup-foot').hidden = name === 'done';
   const next = $('#su-next');
   next.hidden = name === 'done';
@@ -225,7 +226,6 @@ function suChoose() {
   const rec = su.sys && (su.sys.tier.key === 'large' || su.sys.tier.key === 'medium') ? 'local' : 'online';
   const card = (mode, ic, n) => `
     <button class="su-choice ${su.mode === mode ? 'selected' : ''}" data-mode="${mode}" aria-pressed="${su.mode === mode}">
-      ${rec === mode ? `<span class="su-badge">${t('su.recommended')}</span>` : ''}
       <span class="su-choice-icon"><i data-icon="${ic}"></i></span>
       <strong>${t('su.' + mode + 'Title')}</strong>
       <ul>${[1, 2, 3].map((k) => `<li>${t('su.' + mode + n + k)}</li>`).join('')}</ul>
@@ -241,7 +241,9 @@ function suConnect() {
 }
 
 function suConnectLocal() {
-  const head = `<h2 id="su-title">${t('su.localTitle')}</h2><p class="su-lede">${t('su.localLede')}</p>`;
+  const head = `<div class="su-title-row"><h2 id="su-title">${t('su.localTitle')}</h2>
+      <button class="btn btn-ghost btn-sm su-switch" data-mode="online">${icon('globe')}${t('su.useOnline')}</button></div>
+    <p class="su-lede">${t('su.localLede')}</p>`;
   if (!su.servers) return `${head}<div class="su-loading"><span class="spinner"></span>${t('su.looking')}</div>`;
   const bSel = su.local.server === 'builtin';
   const bModels = su.builtinModels || [];
@@ -255,7 +257,6 @@ function suConnectLocal() {
       <span class="su-server-icon"><i data-icon="sparkles"></i></span>
       <span class="su-server-text"><strong>${t('su.builtIn')}</strong>
         <span>${bModels.length ? t('su.builtInFound', { n: bModels.length }) : t('su.builtInNoModels')}</span></span>
-      <span class="su-pill rec">${t('su.recommended')}</span>
       ${bSel ? `
         <div class="field su-model">
           ${bModels.length ? `
@@ -303,7 +304,8 @@ function suConnectOnline() {
   const o = su.online;
   const p = SU_PROVIDERS.find((x) => x.id === o.provider);
   return `
-    <h2 id="su-title">${t('su.onlineTitle')}</h2>
+    <div class="su-title-row"><h2 id="su-title">${t('su.onlineTitle')}</h2>
+      <button class="btn btn-ghost btn-sm su-switch" data-mode="local">${icon('monitor')}${t('su.useLocal')}</button></div>
     <p class="su-lede">${t('su.onlineLede')}</p>
     <div class="su-providers">${SU_PROVIDERS.map((x) => `
       <button class="su-provider ${x.id === o.provider ? 'selected' : ''}" data-provider="${x.id}">${escapeHtml(x.id === 'compatible' ? t('prov.compatible') : x.name)}</button>`).join('')}
@@ -443,6 +445,13 @@ function wireSetupBody(name) {
       }
     });
   }
+  if (name === 'connect') {
+    const sw = body.querySelector('.su-switch');
+    if (sw) sw.addEventListener('click', () => {
+      su.mode = sw.dataset.mode; su.test = null;
+      if (su.mode === 'local' && !su.servers) suDetect(); else renderSetup();
+    });
+  }
   if (name === 'test') on('#su-retry', 'click', suRunTest);
   if (name === 'done') {
     on('#su-apply', 'change', (e) => { su.applyAll = e.target.checked; });
@@ -454,6 +463,7 @@ function wireSetupBody(name) {
 $('#su-next').addEventListener('click', () => { if (suCanNext()) suGo(1); });
 $('#su-back').addEventListener('click', () => suGo(-1));
 $('#su-close').addEventListener('click', () => closeSetup(true));
+$('#su-skip').addEventListener('click', () => closeSetup(true));
 $('#setup').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { e.stopPropagation(); closeSetup(true); }
 });

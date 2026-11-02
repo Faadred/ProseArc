@@ -76,15 +76,32 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
 - The user's models for testing: `E:\Ai\lm-studio\models` (LM Studio layout, publisher/model/file.gguf). Use
   them in place; never copy or download multi-GB models for tests. No Ollama on this PC.
 
-## Where we left off (2026-11-02)
+## Where we left off (2026-11-02, end of a long session)
 
+- **Steps 1–5 of the plan are done on branch `feat/redesign`** (local only: not pushed, not merged; the user
+  decides when). Commits: redesign (cfe7375, 34bce66), Setup (3afac1d), built-in llama.cpp (6ff7ed3),
+  Hugging Face models (1364b01), Providers + encrypted keys (cc59fb4), then Setup switch/skip, neutral provider
+  wording and this README/notes update. Next: the user tests the branch (`start.bat`), then **step 6, release**.
+- Before release (step 6): bump the version; `build.publish.owner` → `Faadred`; remake the README screenshots
+  from a public-domain or made-up book (they still show the old look); release notes in the user's format (see
+  memory); `npm run dist` now fetches the engine first.
+- Not tested yet: a full translation with a real cloud key (no keys used; LM Studio, Groq 401 and the Hugging
+  Face router were checked live); engine Undo (needs a newer llama.cpp stable); a multi-GB Hugging Face download
+  (only a 100 MB model was downloaded).
+- The user's wishes from this session: no opinions in the UI about which provider/model to use (cards and Setup
+  say only where something runs: on this PC / online); Setup must always offer a way out (switch between this PC
+  and online on the Connect step, "Skip for now"); the app must look right at its smallest window (980×600: the
+  sidebar becomes an icon rail below 1100 px). No Ollama on this PC: don't test it.
+- How screens were tested: the real app on a **separate demo profile** (a launcher that calls
+  `app.setPath('userData', …)` before requiring `main.js`, made-up demo books, remote debugging to drive it and
+  take screenshots). Never use the user's real `%APPDATA%\prosearc`, and point the demo profile's
+  `downloadFolder` at a scratch folder before testing downloads.
 - Parked in `git stash` (from July; was uncommitted on `main`): continuity context now sends source ⇢ translation pairs plus a 2-segment
   look-ahead, and asks the model to settle "you" (singular/plural, gender) from that context (`src/prompt.js`,
   label/hint in `i18n.js` + `index.html`). Not tested in a run yet. The user said to skip it for now: leave it
   alone and don't list it as an open item unless they bring it up. If it is ever committed, remove the comment in `prompt.js` that quotes a line
   from the test book first.
-- The user finds the app good but busy for someone new, and plain-looking next to Subloc ("looks meh"; it was
-  built before they cared about looks). They want it to look and feel as easy and solid as Subloc.
+- The user found the app good but busy for someone new and plain next to Subloc; steps 1–5 answer that.
 
 ## Decision: stay on Electron/JavaScript (2026-11-02)
 
