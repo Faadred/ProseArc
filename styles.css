@@ -1560,6 +1560,8 @@ kbd {
 .eng-note .icon { width: 15px; height: 15px; }
 .eng-note.ok { color: var(--status-reviewed); }
 .eng-note.bad { color: var(--danger); }
+.eng-note .spinner { width: 14px; height: 14px; }
+.upd-version { margin: 0 0 var(--s-3); font-weight: 600; }
 
 /* ============================================================================
    Step 4: Find models (Hugging Face)
@@ -1699,3 +1701,6 @@ kbd {
 .btn-link:hover { color: var(--text); }
 .setup-foot #su-skip { margin-inline-start: var(--s-2); }
 .setup-foot #su-next { margin-inline-start: auto; }
+
+/* An Arabic (RTL) field in the English UI: show its English placeholder left to right. */
+html[lang="en"] input[dir="rtl"]:placeholder-shown { direction: ltr; text-align: right; }

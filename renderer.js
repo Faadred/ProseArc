@@ -1628,6 +1628,42 @@ window.addEventListener('langchange', () => {
 // ============================================================================
 //  Settings — app-wide defaults for new projects + appearance
 // ============================================================================
+// ---- App updates (Settings → General → Updates) ------------------------------
+async function renderAppUpdate(st) {
+  const row = $('#upd-row');
+  if (!row) return;
+  const u = st ? { ...(await window.api.appUpdateInfo()), ...st } : await window.api.appUpdateInfo();
+  $('#upd-version').textContent = t('upd.version', { v: u.version });
+  const checkBtn = (busy) => `<button class="btn btn-ghost btn-sm" id="upd-check" ${busy ? 'disabled' : ''}>${icon('refresh-cw')}${escapeHtml(t('upd.check'))}</button>`;
+  if (!u.canSelfUpdate) {
+    row.innerHTML = `<span class="eng-note">${escapeHtml(t('upd.manual'))}</span>
+      <button class="btn btn-ghost btn-sm" id="upd-open">${icon('globe')}${escapeHtml(t('upd.open'))}</button>`;
+    return;
+  }
+  let note = '';
+  if (u.state === 'checking') note = `<span class="eng-note"><span class="spinner"></span>${escapeHtml(t('upd.checking'))}</span>`;
+  else if (u.state === 'none') note = `<span class="eng-note ok">${icon('circle-check')}${escapeHtml(t('upd.none'))}</span>`;
+  else if (u.state === 'error') note = `<span class="eng-note bad">${escapeHtml(t('upd.failed'))}</span>`;
+  else if (u.state === 'downloading') note = `<span class="eng-note">${escapeHtml(t('upd.downloading', { v: u.version || '', pct: u.pct || 0 }))}</span>`;
+  if (u.state === 'ready') {
+    row.innerHTML = `<span class="eng-note ok">${icon('circle-check')}${escapeHtml(t('upd.ready', { v: u.version }))}</span>
+      <button class="btn btn-primary btn-sm" id="upd-install">${icon('refresh-cw')}${escapeHtml(t('upd.restart'))}</button>`;
+    return;
+  }
+  row.innerHTML = checkBtn(u.state === 'checking' || u.state === 'downloading') + note;
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('#upd-check, #upd-install, #upd-open');
+  if (!b) return;
+  if (b.id === 'upd-check') { b.disabled = true; await window.api.appCheckUpdate(); renderAppUpdate(); }
+  else if (b.id === 'upd-install') window.api.appInstallUpdate();
+  else if (b.id === 'upd-open') window.api.appOpenReleases();
+});
+window.api.onAppUpdate((st) => {
+  if (st.state === 'ready') toast(t('upd.readyToast', { v: st.version }), 'success');
+  if ($('#view-settings').classList.contains('active')) renderAppUpdate(st);
+});
+
 async function renderSettings() {
   const s = await window.api.getSettings();
   await fillProviderSelect('#set-provider', s.provider || 'builtin');
@@ -1647,6 +1683,7 @@ async function renderSettings() {
     if (!s.model && chosen) saveSettingsForm(); // keep the shown choice, so new books get a model
   }
   else suggestModels('#set-model-list', prov);
+  renderAppUpdate();
   renderModelsPanel();
   // Appearance reflects the current device state.
   syncSegmented();

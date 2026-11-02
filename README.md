@@ -34,11 +34,10 @@ Built with Electron + plain HTML/CSS/JS — no UI framework.
 - **Export** — TXT, Markdown, PDF, and EPUB (RTL‑aware), with a warning if any segment is still untranslated.
 - **Settings** — defaults for new books, a **Providers** page (one card per provider, with a test and its model list), the built‑in translator (engine, model folders, updates with Undo), and appearance.
 - **Polish** — a clean look that uses the whole window, bundled fonts (Spectral / Amiri / Inter), dark + light themes, book covers (generated when a book has none), keyboard shortcuts (F1), and a full **English / Arabic** interface with RTL.
-- **Updates itself** — the installed app checks GitHub for a new version on start.
+- **Updates itself** — the installed app checks GitHub for a new version on start, or any time from **Settings → Updates**.
 
 ## Coming next
 
-- New screenshots for this page (made from a public‑domain book).
 - Code signing, so Windows stops warning on first run.
 
 ---
@@ -130,11 +129,10 @@ MIT — see [LICENSE](LICENSE).
 - **التصدير** — TXT وMarkdown وPDF وEPUB (يدعم RTL)، مع تنبيه إن بقي أي مقطع غير مترجم.
 - **الإعدادات** — الافتراضيات للكتب الجديدة، وصفحة **المزوّدين** (بطاقة لكل مزوّد مع اختبار وقائمة نماذجه)، والمترجم المدمج (المحرّك، مجلدات النماذج، التحديثات مع التراجع)، والمظهر.
 - **لمسات** — مظهر نظيف يستخدم النافذة كلها، خطوط مضمّنة (Spectral / Amiri / Inter)، سمتان داكنة وفاتحة، أغلفة للكتب (تُولَّد إن لم يكن للكتاب غلاف)، اختصارات لوحة المفاتيح (F1)، وواجهة كاملة **بالإنجليزية / العربية** مع RTL.
-- **يحدّث نفسه** — يتحقق التطبيق المثبَّت من وجود إصدار جديد على GitHub عند تشغيله.
+- **يحدّث نفسه** — يتحقق التطبيق المثبَّت من وجود إصدار جديد على GitHub عند تشغيله، أو في أي وقت من **الإعدادات ← التحديثات**.
 
 ## القادم
 
-- لقطات شاشة جديدة لهذه الصفحة (من كتاب في الملك العام).
 - توقيع رقمي للتطبيق، حتى يتوقف تحذير ويندوز عند أول تشغيل.
 
 ## التنزيل والتشغيل

@@ -322,6 +322,25 @@ function registerIpc() {
     };
   });
 
+  ipcMain.handle('app:updateInfo', () => ({
+    version: require('./package.json').version,
+    canSelfUpdate: !!appUpdater(),
+    portable: !!process.env.PORTABLE_EXECUTABLE_DIR,
+    releasesUrl: 'https://github.com/Faadred/ProseArc/releases/latest',
+    ...updateState,
+  }));
+  ipcMain.handle('app:checkUpdate', async () => {
+    const u = appUpdater();
+    if (!u) return { ok: false, error: 'unsupported' };
+    if (updateState.state === 'downloading' || updateState.state === 'ready') return { ok: true };
+    try { await u.checkForUpdates(); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; }
+  });
+  ipcMain.handle('app:installUpdate', () => {
+    const u = appUpdater();
+    if (u && updateState.state === 'ready') { if (builtin) builtin.stop(); u.quitAndInstall(); }
+  });
+  ipcMain.handle('app:openReleases', () => shell.openExternal('https://github.com/Faadred/ProseArc/releases/latest'));
+
   ipcMain.handle('engine:checkUpdate', async () => {
     try {
       const info = await llamaRelease.getStableBuild();
@@ -481,6 +500,35 @@ function migrateLegacyUserData() {
   }
 }
 
+// ---- App updates from GitHub releases ---------------------------------------
+// Installed builds only: the portable exe has no install location to update,
+// and dev runs aren't packaged. Those get a link to the releases page instead.
+let updater;             // electron-updater's autoUpdater, set up once
+let updateState = { state: 'idle' };
+const canSelfUpdate = () => app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR;
+function setUpdateState(s) {
+  updateState = s;
+  for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('app:update', s); } catch { /* closing */ } }
+}
+function appUpdater() {
+  if (updater !== undefined) return updater;
+  updater = null;
+  if (!canSelfUpdate()) return updater;
+  try {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on('checking-for-update', () => setUpdateState({ state: 'checking' }));
+    autoUpdater.on('update-not-available', () => setUpdateState({ state: 'none' }));
+    autoUpdater.on('update-available', (i) => setUpdateState({ state: 'downloading', version: i.version, pct: 0 }));
+    autoUpdater.on('download-progress', (p) => setUpdateState({ ...updateState, state: 'downloading', pct: Math.floor(p.percent || 0) }));
+    autoUpdater.on('update-downloaded', (i) => setUpdateState({ state: 'ready', version: i.version }));
+    autoUpdater.on('error', (err) => setUpdateState({ state: 'error', error: String((err && err.message) || err) }));
+    updater = autoUpdater;
+  } catch { /* updater unavailable — never block app start */ }
+  return updater;
+}
+
 app.whenReady().then(() => {
   // userData is the OS-specific per-app data folder (safe, writable, persists
   // across app updates). Projects live in a subfolder of it.
@@ -502,15 +550,9 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
 
-  // Auto-update from GitHub releases (installed builds only — the portable
-  // exe has no install location to update, and dev runs aren't packaged).
-  if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) {
-    try {
-      const { autoUpdater } = require('electron-updater');
-      autoUpdater.on('error', () => {}); // being offline is normal; stay quiet
-      autoUpdater.checkForUpdatesAndNotify().catch(() => {});
-    } catch { /* updater unavailable — never block app start */ }
-  }
+  // Check GitHub for a new version on start (downloads in the background;
+  // installs on quit or with "Restart to update" in Settings).
+  if (appUpdater()) appUpdater().checkForUpdates().catch(() => {});
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

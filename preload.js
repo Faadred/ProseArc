@@ -74,6 +74,16 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('hub:progress', listener);
     return () => ipcRenderer.removeListener('hub:progress', listener);
   },
+  // App updates from GitHub releases
+  appUpdateInfo: () => ipcRenderer.invoke('app:updateInfo'),
+  appCheckUpdate: () => ipcRenderer.invoke('app:checkUpdate'),
+  appInstallUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  appOpenReleases: () => ipcRenderer.invoke('app:openReleases'),
+  onAppUpdate: (callback) => {
+    const listener = (_e, s) => callback(s);
+    ipcRenderer.on('app:update', listener);
+    return () => ipcRenderer.removeListener('app:update', listener);
+  },
   onEngineProgress: (callback) => {
     const listener = (_e, p) => callback(p);
     ipcRenderer.on('engine:progress', listener);
