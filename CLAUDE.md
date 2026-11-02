@@ -92,6 +92,9 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
   say only where something runs: on this PC / online); Setup must always offer a way out (switch between this PC
   and online on the Connect step, "Skip for now"); the app must look right at its smallest window (980×600: the
   sidebar becomes an icon rail below 1100 px). No Ollama on this PC: don't test it.
+- Don't imply local translation needs strong hardware: small models (~4B) run on a modest GPU or on CPU/RAM and
+  can translate well; quality depends on the model. Translation goes passage by passage (built-in context 8K),
+  never the whole book at once.
 - How screens were tested: the real app on a **separate demo profile** (a launcher that calls
   `app.setPath('userData', …)` before requiring `main.js`, made-up demo books, remote debugging to drive it and
   take screenshots). Never use the user's real `%APPDATA%\prosearc`, and point the demo profile's
