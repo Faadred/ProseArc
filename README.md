@@ -31,7 +31,18 @@ Built with Electron + plain HTML/CSS/JS — no UI framework.
 - **Glossary** — a shared dictionary plus per‑project terms (project overrides shared), injected only into segments where a term appears, to stop name‑drift — plus **auto‑suggested names** detected from the book.
 - **Export** — TXT, Markdown, PDF, and EPUB (RTL‑aware), with a warning if any segment is still untranslated.
 - **Settings** — app‑wide defaults for new projects (model, languages, context) plus appearance.
-- **Polish** — bundled fonts (Spectral / Amiri / Inter), dark + light themes, and a full **English / Arabic** interface with RTL.
+- **Polish** — bundled fonts (Spectral / Amiri / Inter), dark + light themes, book covers, and a full **English / Arabic** interface with RTL.
+- **Updates itself** — the installed app checks GitHub for a new version on start.
+
+## Coming next
+
+ProseArc is getting easier to start with:
+
+- **A fresh look** that uses the whole window, with clear icons and bigger book covers.
+- **A first‑run setup** that checks your PC and gets you translating in a few clicks.
+- **A built‑in translator** (llama.cpp): no LM Studio needed, still fully on your PC.
+- **Find models on Hugging Face** from inside the app, with the right file for your PC suggested and the download checked.
+- **A providers page** in Settings: one card per AI provider (OpenAI, Claude, Gemini, OpenRouter, Groq, DeepSeek, Ollama, LM Studio…), with keys stored encrypted.
 
 ---
 
@@ -39,7 +50,7 @@ Built with Electron + plain HTML/CSS/JS — no UI framework.
 
 For most people — no Node, no setup:
 
-**[⬇ Download the latest release](https://github.com/FEzio78/ProseArc/releases/latest)** (Windows)
+**[⬇ Download the latest release](https://github.com/Faadred/ProseArc/releases/latest)** (Windows)
 
 - **Installer** (`ProseArc‑Setup‑*.exe`) — adds a Start Menu shortcut + uninstaller, or
 - **Portable** (`ProseArc‑*‑portable.exe`) — a single file, just double‑click.
@@ -119,13 +130,24 @@ MIT — see [LICENSE](LICENSE).
 - **المسرد** — قاموس مشترك ومصطلحات لكل مشروع (مصطلحات المشروع تتجاوز المشتركة)، تُحقَن فقط في المقاطع التي يظهر فيها المصطلح لمنع تذبذب الأسماء — مع **أسماء مقترحة** تلقائيًا من الكتاب.
 - **التصدير** — TXT وMarkdown وPDF وEPUB (يدعم RTL)، مع تنبيه إن بقي أي مقطع غير مترجم.
 - **الإعدادات** — قيم افتراضية على مستوى التطبيق للمشاريع الجديدة (النموذج، اللغات، السياق) إضافةً إلى المظهر.
-- **لمسات** — خطوط مضمّنة (Spectral / Amiri / Inter)، سمتان داكنة وفاتحة، وواجهة كاملة **بالإنجليزية / العربية** مع RTL.
+- **لمسات** — خطوط مضمّنة (Spectral / Amiri / Inter)، سمتان داكنة وفاتحة، أغلفة للكتب، وواجهة كاملة **بالإنجليزية / العربية** مع RTL.
+- **يحدّث نفسه** — يتحقق التطبيق المثبَّت من وجود إصدار جديد على GitHub عند تشغيله.
+
+## القادم
+
+نعمل على أن يصبح ProseArc أسهل في البداية:
+
+- **مظهر جديد** يستخدم النافذة كلها، مع أيقونات واضحة وأغلفة أكبر للكتب.
+- **إعداد عند أول تشغيل** يفحص جهازك ويجهّزك للترجمة ببضع نقرات.
+- **مترجم مدمج** (llama.cpp): لا حاجة إلى LM Studio، ويبقى كل شيء على جهازك.
+- **البحث عن النماذج في Hugging Face** من داخل التطبيق، مع اقتراح الملف المناسب لجهازك والتحقق من التنزيل.
+- **صفحة للمزوّدين** في الإعدادات: بطاقة لكل مزوّد ذكاء اصطناعي (OpenAI وClaude وGemini وOpenRouter وGroq وDeepSeek وOllama وLM Studio…)، مع حفظ المفاتيح مشفّرة.
 
 ## التنزيل والتشغيل
 
 لمعظم الناس — دون Node ودون إعداد:
 
-**[⬇ نزّل أحدث إصدار](https://github.com/FEzio78/ProseArc/releases/latest)** (ويندوز)
+**[⬇ نزّل أحدث إصدار](https://github.com/Faadred/ProseArc/releases/latest)** (ويندوز)
 
 - **المثبِّت** (`ProseArc‑Setup‑*.exe`) — يضيف اختصارًا في قائمة ابدأ وأداة إزالة، أو
 - **المحمول** (`ProseArc‑*‑portable.exe`) — ملف واحد، انقر نقرًا مزدوجًا فحسب.
