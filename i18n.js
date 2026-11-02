@@ -431,7 +431,7 @@ const I18N = {
   },
 
   ar: {
-    'brand.sub': 'مكتب المترجم',
+    'brand.sub': 'المترجم المساعد',
     'nav.library': 'المكتبة', 'nav.workspace': 'مساحة العمل', 'nav.review': 'المراجعة', 'nav.reader': 'قراءة', 'nav.glossary': 'المسرد', 'nav.settings': 'الإعدادات',
     'nav.translate': 'الترجمة', 'nav.openBook': 'الكتاب المفتوح', 'bn.meta': 'تُرجم {pct}%',
     'theme.dark': 'داكن', 'theme.light': 'فاتح', 'theme.toggle': 'التبديل بين الفاتح والداكن', 'lang.toggle': 'English — تغيير اللغة',
