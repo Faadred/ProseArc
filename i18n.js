@@ -70,7 +70,6 @@ const I18N = {
     "su.onlineTitle": "Online provider",
     "su.localP1": "Private: the book never leaves your PC",
     "su.localP2": "Free to run, works offline",
-    "su.localP3": "Needs a capable graphics card",
     "su.onlineP1": "Works on any PC",
     "su.onlineP2": "Strong models, good Arabic",
     "su.onlineP3": "Needs an API key; the provider charges per use",
@@ -421,6 +420,7 @@ const I18N = {
     "su.tier.small": "Small models (up to about {maxB}B) fit on your graphics card.",
     "su.tier.cpu": "No graphics card with its own memory was found. Small models can run on the processor, slowly.",
     "su.tier.online": "This PC has no graphics card with its own memory, and little system memory for running models.",
+    "su.localP3": "Runs on the graphics card or the processor — small models work too",
   },
 
   ar: {
@@ -488,7 +488,6 @@ const I18N = {
     "su.onlineTitle": "مزوّد عبر الإنترنت",
     "su.localP1": "خصوصية: الكتاب لا يغادر جهازك",
     "su.localP2": "مجاني ويعمل دون إنترنت",
-    "su.localP3": "يحتاج بطاقة رسوميات قوية",
     "su.onlineP1": "يعمل على أي جهاز",
     "su.onlineP2": "نماذج قوية وعربية جيدة",
     "su.onlineP3": "يحتاج مفتاح API، ويحاسبك المزوّد حسب الاستخدام",
@@ -839,6 +838,7 @@ const I18N = {
     "su.tier.small": "تتسع بطاقة الرسوميات لنماذج صغيرة (حتى نحو {maxB}B).",
     "su.tier.cpu": "لم نجد بطاقة رسوميات بذاكرة مستقلة. يمكن تشغيل النماذج الصغيرة على المعالج، ببطء.",
     "su.tier.online": "لا توجد في هذا الجهاز بطاقة رسوميات بذاكرة مستقلة، وذاكرة النظام قليلة لتشغيل النماذج.",
+    "su.localP3": "يعمل على بطاقة الرسوميات أو المعالج — والنماذج الصغيرة تعمل أيضًا",
   },
 };
 
