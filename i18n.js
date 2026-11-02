@@ -6,7 +6,7 @@
 
 const I18N = {
   en: {
-    'brand.sub': "The translator's desk",
+    'brand.sub': 'Your translation assistant',
     'nav.library': 'Library', 'nav.workspace': 'Workspace', 'nav.review': 'Review', 'nav.reader': 'Read', 'nav.glossary': 'Glossary', 'nav.settings': 'Settings',
     'nav.translate': 'Translate', 'nav.openBook': 'Open book', 'bn.meta': '{pct}% translated',
     'theme.dark': 'Dark', 'theme.light': 'Light', 'theme.toggle': 'Switch light / dark', 'lang.toggle': 'العربية — switch language',
@@ -431,7 +431,7 @@ const I18N = {
   },
 
   ar: {
-    'brand.sub': 'مكتب المترجم',
+    'brand.sub': 'المترجم المساعد',
     'nav.library': 'المكتبة', 'nav.workspace': 'مساحة العمل', 'nav.review': 'المراجعة', 'nav.reader': 'قراءة', 'nav.glossary': 'المسرد', 'nav.settings': 'الإعدادات',
     'nav.translate': 'الترجمة', 'nav.openBook': 'الكتاب المفتوح', 'bn.meta': 'تُرجم {pct}%',
     'theme.dark': 'داكن', 'theme.light': 'فاتح', 'theme.toggle': 'التبديل بين الفاتح والداكن', 'lang.toggle': 'English — تغيير اللغة',
