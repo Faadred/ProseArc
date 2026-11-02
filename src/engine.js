@@ -27,7 +27,7 @@ function stripThinking(text) {
   return s.trim();
 }
 
-function createEngine({ store }) {
+function createEngine({ store, builtin }) {
   let running = false;
   let aborted = false;
   let controller = null;   // AbortController for the in-flight request
@@ -62,6 +62,7 @@ function createEngine({ store }) {
     else if (provider === 'openrouter') { url = 'https://openrouter.ai/api/v1/chat/completions'; headers.Authorization = `Bearer ${s.openrouter || ''}`; missingKey = !s.openrouter; }
     else if (provider === 'gemini') { url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'; headers.Authorization = `Bearer ${s.gemini || ''}`; missingKey = !s.gemini; }
     else if (provider === 'compatible') { url = `${(s.compatibleBaseUrl || '').replace(/\/+$/, '')}/chat/completions`; if (s.compatible) headers.Authorization = `Bearer ${s.compatible}`; missingKey = !s.compatibleBaseUrl; }
+    else if (provider === 'builtin') { url = builtin ? builtin.url() : ''; } // ProseArc's own llama-server
     else { url = project.apiUrl; } // local
 
     const body = { model: model || 'local-model', messages, temperature: 0.3, stream: false };
@@ -170,6 +171,7 @@ function createEngine({ store }) {
   function friendlyError(err) {
     const code = err && err.cause && err.cause.code;
     if (err.noKey) return { key: 'noKey', params: {} };
+    if (err.builtin) return { key: `builtin.${err.builtin}`, params: {} };
     if (err.timeout) return { key: 'timeout', params: { sec: Math.round(REQUEST_TIMEOUT_MS / 1000) } };
     if (code === 'ECONNREFUSED' || /fetch failed/i.test(err.message)) return { key: 'unreachable', params: {} };
     if (err.httpStatus === 404) return { key: 'http404', params: {} };
@@ -179,6 +181,21 @@ function createEngine({ store }) {
   }
 
   const counts = (project) => store.countStatuses(project.segments);
+
+  // The built-in translator runs as its own program; start it (or switch its
+  // model) before the first request. Other providers need nothing here.
+  async function prepare(project, log = emit) {
+    if ((project.provider || 'local') !== 'builtin') return;
+    if (!builtin) { const e = new Error('no builtin'); e.builtin = 'noEngine'; throw e; }
+    const st = builtin.status();
+    if (!(st.status === 'ready' && st.model === project.model)) {
+      const name = String(project.model || '').split(/[\\/]/).pop();
+      log({ type: 'log', level: 'info', key: 'builtinStarting', params: { model: name } });
+    }
+    const t0 = Date.now();
+    await builtin.ensure({ model: project.model, thinking: !!project.thinking });
+    if (Date.now() - t0 > 500) log({ type: 'log', level: 'success', key: 'builtinReady', params: { sec: Math.round((Date.now() - t0) / 1000) } });
+  }
 
   async function start(projectId, sender) {
     if (running) return;
@@ -195,6 +212,8 @@ function createEngine({ store }) {
     activeSecrets = await store.getSecrets();
     emit({ type: 'started' });
     emit({ type: 'progress', counts: counts(project) });
+    try { await prepare(project); }
+    catch (err) { emit({ type: 'error', ...friendlyError(err) }); running = false; return; }
 
     // Large games have tens of thousands of segments, so we work on one
     // in-memory copy and persist in batches rather than re-reading/writing the
@@ -266,6 +285,8 @@ function createEngine({ store }) {
     const globalGlossary = await store.getGlobalGlossary();
     activeSecrets = await store.getSecrets();
     emit({ type: 'started', mode: 'single' });
+    try { await prepare(project); }
+    catch (err) { emit({ type: 'error', ...friendlyError(err) }); running = false; return; }
     emit({ type: 'log', level: 'info', key: 'retranslating', params: { n: index + 1 } });
 
     let translation;
@@ -334,6 +355,8 @@ function createEngine({ store }) {
       contextWindow: 0, glossary: [],
       segments: [{ id: 0, type: 'paragraph', original: cfg.text, translation: '', status: 'pending' }],
     };
+    try { await prepare(project, () => {}); }
+    catch (err) { return { ok: false, ...friendlyError(err) }; }
     const ac = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; ac.abort(); }, REQUEST_TIMEOUT_MS);

@@ -20,5 +20,11 @@ if not exist "node_modules\electron" (
   )
 )
 
+rem The built-in translator's engine (llama.cpp), fetched and checked once.
+if not exist "vendor\llama\build.json" (
+  echo Fetching the built-in translator engine, first run only...
+  call npm run fetch-engine
+)
+
 call npm start
 if errorlevel 1 pause

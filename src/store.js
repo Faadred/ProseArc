@@ -263,6 +263,17 @@ function createStore(projectsDir) {
   }
 
   /** Cloud API keys (per provider). Returns {} if none saved. */
+  // App-level config: model folders, built-in engine choice. Not project defaults.
+  const appConfigPath = path.join(path.dirname(projectsDir), 'app-config.json');
+  async function getAppConfig() {
+    try { return JSON.parse(await fsp.readFile(appConfigPath, 'utf8')) || {}; } catch { return {}; }
+  }
+  async function saveAppConfig(patch) {
+    const next = { ...(await getAppConfig()), ...(patch || {}) };
+    await atomicWrite(appConfigPath, next);
+    return next;
+  }
+
   async function getSecrets() {
     try {
       const raw = JSON.parse(await fsp.readFile(secretsPath, 'utf8'));
@@ -327,6 +338,8 @@ function createStore(projectsDir) {
     saveSettings,
     getSecrets,
     saveSecrets,
+    getAppConfig,
+    saveAppConfig,
     deleteProject,
     saveCover,
     getCoverPath,

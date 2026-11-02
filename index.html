@@ -167,6 +167,7 @@
               <div class="field">
                 <label for="ws-provider" data-i18n="f.provider">Provider</label>
                 <select id="ws-provider">
+                  <option value="builtin" data-i18n="prov.builtin">Built-in (this PC)</option>
                   <option value="local" data-i18n="prov.local">Local (LM Studio)</option>
                   <option value="openai">OpenAI</option>
                   <option value="openrouter">OpenRouter</option>
@@ -176,7 +177,12 @@
                 </select>
                 <p class="settings-note" id="ws-provider-note" data-i18n="f.providerKeyNote">Set this provider's API key in Settings → API keys.</p>
               </div>
-              <div class="field">
+              <div class="field" id="ws-bmodel-field" hidden>
+                  <label for="ws-bmodel" data-i18n="f.bmodel">Model</label>
+                  <select id="ws-bmodel"></select>
+                  <p class="settings-note" id="ws-bmodel-note"></p>
+                </div>
+                <div class="field" id="ws-model-field">
                 <label for="ws-model"><span data-i18n="f.model">Model name</span>
                   <span class="hint" data-i18n="f.modelOpt">(optional)</span></label>
                 <input id="ws-model" type="text" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
@@ -414,6 +420,7 @@
           <div class="field">
             <label for="set-provider" data-i18n="f.provider">Provider</label>
             <select id="set-provider">
+              <option value="builtin" data-i18n="prov.builtin">Built-in (this PC)</option>
               <option value="local" data-i18n="prov.local">Local (LM Studio)</option>
               <option value="openai">OpenAI</option>
               <option value="openrouter">OpenRouter</option>
@@ -422,7 +429,12 @@
               <option value="compatible" data-i18n="prov.compatible">OpenAI‑compatible</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field" id="set-bmodel-field" hidden>
+              <label for="set-bmodel" data-i18n="f.bmodel">Model</label>
+              <select id="set-bmodel"></select>
+              <p class="settings-note" id="set-bmodel-note"></p>
+            </div>
+            <div class="field" id="set-model-field">
             <label for="set-model"><span data-i18n="f.model">Model name</span>
               <span class="hint" data-i18n="f.modelOpt">(optional)</span></label>
             <input id="set-model" type="text" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
@@ -465,6 +477,29 @@
             </div>
           </div>
           <p class="settings-note" data-i18n="set.appearanceNote">Appearance is saved on this device.</p>
+        </div>
+
+        <!-- Built-in translator: engine, model folders, models found -->
+        <div class="panel models-panel" id="models-panel">
+          <h3 class="panel-title"><i data-icon="cpu"></i><span data-i18n="mdl.title">Built-in translator</span></h3>
+          <div class="engine-line" id="engine-line"></div>
+          <div class="engine-actions" id="engine-actions"></div>
+          <h4 class="sub-title" data-i18n="mdl.folders">Model folders</h4>
+          <p class="settings-note" data-i18n="mdl.foldersNote">ProseArc looks for .gguf models in these folders and every folder inside them.</p>
+          <div class="folder-drop" id="folder-drop">
+            <ul class="folder-list" id="folder-list"></ul>
+            <div class="drop-hint">
+              <i data-icon="folder-plus"></i>
+              <span data-i18n="mdl.dropHint">Drop a folder here, or</span>
+              <button class="btn btn-ghost btn-sm" id="folder-add"><span data-i18n="mdl.addFolder">Add folder…</span></button>
+            </div>
+          </div>
+          <div class="models-head">
+            <h4 class="sub-title" data-i18n="mdl.found">Models found</h4>
+            <button class="btn btn-ghost btn-sm" id="models-rescan"><i data-icon="refresh-cw"></i><span data-i18n="mdl.rescan">Look again</span></button>
+          </div>
+          <div class="model-list" id="model-list"></div>
+          <p class="settings-note" data-i18n="mdl.untested">Models ProseArc hasn’t been tested with may translate worse, Arabic especially.</p>
         </div>
 
         <!-- API keys (cloud providers) -->

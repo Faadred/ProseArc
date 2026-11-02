@@ -1479,3 +1479,84 @@ kbd {
   .ed-actions .btn:not(#rv-save) { padding-inline: 9px; }
   .ed-search { margin: 0; max-width: none; min-width: 160px; }
 }
+
+/* ============================================================================
+   Step 3: built-in translator — models panel, fit badges, engine status
+   ========================================================================== */
+.models-panel { grid-column: 1 / -1; }
+.sub-title { font-size: 0.95rem; font-weight: 600; margin: var(--s-5) 0 var(--s-1); }
+.models-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); }
+
+.engine-line {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-3) var(--s-4); border-radius: var(--r-lg); background: var(--surface-2);
+}
+.engine-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.engine-text small { color: var(--muted); font-size: var(--fs-sm); }
+.engine-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--status-pending); }
+.engine-dot.ready { background: var(--status-reviewed); box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-reviewed) 22%, transparent); }
+.engine-dot.starting { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.engine-dot.error { background: var(--danger); }
+@keyframes pulse { 50% { opacity: 0.35; } }
+
+.folder-drop {
+  margin-top: var(--s-3); border: 2px dashed var(--line); border-radius: var(--r-lg);
+  padding: var(--s-2); transition: border-color var(--ease), background var(--ease);
+}
+.folder-drop.drag, .su-server.drag { border-color: var(--accent); background: var(--accent-soft); }
+.folder-list { list-style: none; margin: 0; padding: 0; }
+.folder-list li { display: flex; align-items: center; gap: var(--s-3); padding: 6px var(--s-2); border-radius: var(--r-sm); }
+.folder-list li:hover { background: var(--surface-2); }
+.folder-icon { color: var(--accent); display: inline-flex; }
+.folder-icon .icon { width: 18px; height: 18px; }
+.folder-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem; }
+.folder-list .icon-btn { width: 30px; height: 30px; }
+.drop-hint { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); color: var(--muted); font-size: var(--fs-sm); }
+.drop-hint .icon { width: 18px; height: 18px; }
+
+.model-list { margin-top: var(--s-2); display: flex; flex-direction: column; gap: 2px; }
+.model-row {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-2) var(--s-3); border-radius: var(--r-md);
+}
+.model-row:hover { background: var(--surface-2); }
+.model-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.model-text strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-text small { color: var(--muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-default { display: inline-flex; align-items: center; gap: 5px; color: var(--status-reviewed); font-size: var(--fs-sm); font-weight: 600; padding: 0 var(--s-3); }
+.model-default .icon { width: 15px; height: 15px; }
+
+.fit-badge {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  padding: 3px 10px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600;
+  background: var(--surface-3); color: var(--muted);
+}
+.fit-badge .icon { width: 13px; height: 13px; }
+.fit-badge.fit-fits { background: color-mix(in srgb, var(--status-reviewed) 16%, transparent); color: var(--status-reviewed); }
+.fit-badge.fit-partial, .fit-badge.fit-slow { background: var(--accent-soft); color: var(--accent); }
+.fit-badge.fit-toobig { background: var(--danger-soft); color: var(--danger); }
+.fit-note { display: flex; align-items: center; gap: 6px; }
+.fit-note .icon { width: 15px; height: 15px; flex-shrink: 0; }
+.fit-note.fit-fits { color: var(--status-reviewed); }
+.fit-note.fit-partial, .fit-note.fit-slow { color: var(--accent); }
+.fit-note.fit-toobig { color: var(--danger); }
+
+/* Setup: the built-in card */
+.su-pill.rec { background: var(--accent); color: var(--accent-ink); }
+.su-drop { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-3); color: var(--muted); font-size: var(--fs-sm); }
+.su-drop > .icon { width: 17px; height: 17px; color: var(--accent); }
+
+/* Engine builds: NVIDIA download, choice, updates */
+.engine-actions { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-3); }
+.engine-card { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-4); border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); }
+.engine-card-text { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.engine-card-text small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; }
+.dl-bar { display: block; height: 6px; border-radius: 6px; background: var(--surface-3); overflow: hidden; margin: 4px 0 2px; }
+.dl-bar span { display: block; height: 100%; background: var(--accent); transition: width 200ms linear; }
+.engine-choice { margin: 0; }
+.engine-row { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.eng-note { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-sm); }
+.eng-note .icon { width: 15px; height: 15px; }
+.eng-note.ok { color: var(--status-reviewed); }
+.eng-note.bad { color: var(--danger); }

@@ -23,7 +23,8 @@
   ],
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "node scripts/fetch-llama.js && electron-builder",
+    "fetch-engine": "node scripts/fetch-llama.js"
   },
   "build": {
     "appId": "com.prosearc.app",
@@ -35,7 +36,8 @@
       "!*.bat",
       "!*.pdf",
       "!sample-manuscript.txt",
-      "!BUILD_BRIEF.md"
+      "!BUILD_BRIEF.md",
+      "!vendor/**"
     ],
     "publish": {
       "provider": "github",
@@ -59,7 +61,16 @@
       "license": "LICENSE",
       "shortcutName": "ProseArc",
       "artifactName": "ProseArc-Setup-${version}.exe"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "vendor/llama",
+        "to": "llama",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   },
   "devDependencies": {
     "electron": "^42.4.0",

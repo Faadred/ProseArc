@@ -285,6 +285,7 @@ async function loadProject(id) {
   $('#ws-style').value = project.styleBrief || '';
   $('#ws-provider').value = project.provider || 'local';
   applyProviderVisibility(project.provider || 'local', '#ws-url-field', '#ws-provider-note');
+  if (project.provider === 'builtin') fillModelSelect('#ws-bmodel', project.model, '#ws-bmodel-note');
 
   renderProgress(countStatuses(project.segments));
   clearError();
@@ -455,7 +456,9 @@ async function saveSettings() {
   currentProject.sourceLang = $('#ws-source').value.trim() || 'Source';
   currentProject.targetLang = $('#ws-target').value.trim() || 'Target';
   currentProject.apiUrl = $('#ws-url').value.trim();
-  currentProject.model = $('#ws-model').value.trim();
+  currentProject.model = currentProject.provider === 'builtin' || $('#ws-provider').value === 'builtin'
+    ? $('#ws-bmodel').value
+    : $('#ws-model').value.trim();
   currentProject.contextWindow = Math.max(0, parseInt($('#ws-context').value, 10) || 0);
   currentProject.thinking = $('#ws-thinking').checked;
   currentProject.styleBrief = $('#ws-style').value.trim();
@@ -471,15 +474,53 @@ async function saveSettings() {
 // Show the API-URL field only for the local provider; show a key hint for cloud.
 function applyProviderVisibility(provider, urlFieldSel, noteSel) {
   const local = provider === 'local';
+  const builtinP = provider === 'builtin';
   const urlEl = $(urlFieldSel);
   if (urlEl) urlEl.style.display = local ? '' : 'none';
-  if (noteSel) { const n = $(noteSel); if (n) n.style.display = local ? 'none' : ''; }
+  if (noteSel) { const n = $(noteSel); if (n) n.style.display = (local || builtinP) ? 'none' : ''; }
+  const pre = urlFieldSel.startsWith('#ws') ? 'ws' : 'set';
+  $(`#${pre}-bmodel-field`).hidden = !builtinP;
+  $(`#${pre}-model-field`).hidden = builtinP;
 }
 
-['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider', '#ws-thinking']
+// ---- Built-in translator: models ------------------------------------------
+let modelFilesCache = null;
+async function getModelFiles(refresh = false) {
+  if (!modelFilesCache || refresh) modelFilesCache = await window.api.listModelFiles();
+  return modelFilesCache;
+}
+const FIT_ICON = { fits: 'circle-check', partial: 'info', slow: 'info', toobig: 'circle-alert' };
+function modelLabel(m) {
+  return [m.name, [m.params, m.quant].filter(Boolean).join(' '), `${m.sizeGB} GB`].filter(Boolean).join(' · ');
+}
+// Fill a <select> with the models found; keep `value` even if it's gone.
+async function fillModelSelect(sel, value, noteSel) {
+  const el = $(sel);
+  const models = await getModelFiles();
+  const opts = models.map((m) => `<option value="${escapeHtml(m.path)}">${escapeHtml(modelLabel(m))}${m.fit === 'toobig' ? ' — ' + escapeHtml(t('fit.toobig')) : ''}</option>`);
+  if (value && !models.some((m) => m.path === value)) {
+    opts.unshift(`<option value="${escapeHtml(value)}">${escapeHtml(value.split(/[\\/]/).pop())} — ${escapeHtml(t('mdl.missing'))}</option>`);
+  }
+  if (!models.length && !value) opts.unshift(`<option value="">${escapeHtml(t('mdl.none'))}</option>`);
+  el.innerHTML = opts.join('');
+  el.value = value || (models.find((m) => m.fit === 'fits') || models[0] || {}).path || '';
+  if (noteSel) {
+    const m = models.find((x) => x.path === el.value);
+    $(noteSel).innerHTML = !models.length
+      ? escapeHtml(t('mdl.noneHint'))
+      : m ? `${icon(FIT_ICON[m.fit])}<span>${escapeHtml(t('fit.' + m.fit))}</span>` : '';
+    $(noteSel).className = `settings-note fit-note ${m ? 'fit-' + m.fit : ''}`;
+  }
+  return el.value;
+}
+
+['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider', '#ws-thinking', '#ws-bmodel']
   .forEach((sel) => $(sel).addEventListener('change', saveSettings));
-$('#ws-provider').addEventListener('change', (e) =>
-  applyProviderVisibility(e.target.value, '#ws-url-field', '#ws-provider-note'));
+$('#ws-bmodel').addEventListener('change', () => fillModelSelect('#ws-bmodel', $('#ws-bmodel').value, '#ws-bmodel-note'));
+$('#ws-provider').addEventListener('change', async (e) => {
+  applyProviderVisibility(e.target.value, '#ws-url-field', '#ws-provider-note');
+  if (e.target.value === 'builtin') { await fillModelSelect('#ws-bmodel', '', '#ws-bmodel-note'); saveSettings(); }
+});
 
 // ---- Activity log -----------------------------------------------------------
 function logLine(message, level = 'info') {
@@ -1535,6 +1576,8 @@ async function renderSettings() {
   $('#set-test-result').textContent = '';
   $('#set-test-result').className = 'test-result';
   applyProviderVisibility(s.provider || 'local', '#set-url-field', null);
+  if (s.provider === 'builtin') fillModelSelect('#set-bmodel', s.model, '#set-bmodel-note');
+  renderModelsPanel();
   // Appearance reflects the current device state.
   syncSegmented();
   // API keys.
@@ -1553,7 +1596,7 @@ async function saveSettingsForm() {
     sourceLang: $('#set-source').value.trim() || 'English',
     targetLang: $('#set-target').value.trim() || 'Arabic',
     apiUrl: $('#set-url').value.trim(),
-    model: $('#set-model').value.trim(),
+    model: $('#set-provider').value === 'builtin' ? $('#set-bmodel').value : $('#set-model').value.trim(),
     contextWindow: Math.max(0, parseInt($('#set-context').value, 10) || 0),
     thinking: $('#set-thinking').checked,
   });
@@ -1571,8 +1614,11 @@ async function saveSecretsForm() {
 
 ['#set-source', '#set-target', '#set-url', '#set-model', '#set-context', '#set-provider', '#set-thinking']
   .forEach((sel) => $(sel).addEventListener('change', saveSettingsForm));
-$('#set-provider').addEventListener('change', (e) =>
-  applyProviderVisibility(e.target.value, '#set-url-field', null));
+$('#set-provider').addEventListener('change', async (e) => {
+  applyProviderVisibility(e.target.value, '#set-url-field', null);
+  if (e.target.value === 'builtin') { await fillModelSelect('#set-bmodel', '', '#set-bmodel-note'); saveSettingsForm(); }
+});
+$('#set-bmodel').addEventListener('change', () => { fillModelSelect('#set-bmodel', $('#set-bmodel').value, '#set-bmodel-note'); saveSettingsForm(); });
 ['#key-openai', '#key-openrouter', '#key-gemini', '#key-anthropic', '#key-compatible', '#key-compatible-base']
   .forEach((sel) => $(sel).addEventListener('change', saveSecretsForm));
 $('#set-test').addEventListener('click', () => runConnectionTest($('#set-url').value, $('#set-test-result')));
@@ -1996,6 +2042,205 @@ $('#rd-scroll').addEventListener('scroll', () => {
     if (seg != null) localStorage.setItem(`reader-pos:${currentProject.id}`, seg);
   }, 400);
 });
+
+// ---- Settings: Built-in translator panel ------------------------------------
+let builtinState = { status: 'stopped' };
+async function renderEngineLine() {
+  const line = $('#engine-line');
+  if (!line) return;
+  const info = await window.api.engineInfo();
+  const st = builtinState;
+  const eng = info.engines.find((x) => x.id === info.active);
+  const engText = eng ? t('mdl.engine', { flavour: t('eng.' + eng.flavour), build: eng.build }) : t('mdl.noEngine');
+  let stText = t('bi.' + st.status);
+  if (st.status === 'ready' || st.status === 'starting') stText = t('bi.' + st.status + 'Model', { model: String(st.model || '').split(/[\\/]/).pop() });
+  if (st.status === 'error') stText = t('err.builtin.' + (st.reason || 'crash'));
+  line.innerHTML = `
+    <span class="engine-dot ${st.status}"></span>
+    <span class="engine-text"><strong>${escapeHtml(stText)}</strong><small>${escapeHtml(engText)}</small></span>
+    ${st.status === 'ready' || st.status === 'starting' ? `<button class="btn btn-ghost btn-sm" id="engine-stop">${icon('square')}${escapeHtml(t('bi.stop'))}</button>` : ''}`;
+  const stopBtn = $('#engine-stop');
+  if (stopBtn) stopBtn.addEventListener('click', () => window.api.builtinStop());
+}
+// Engine builds: NVIDIA download, choice, updates, Undo.
+let engineProgress = null;  // { flavour, phase, done, total }
+let engineUpdate = null;    // result of the last "Check for updates"
+const MB = 1024 * 1024;
+async function renderEngineActions() {
+  const box = $('#engine-actions');
+  if (!box) return;
+  const [info, sys] = await Promise.all([window.api.engineInfo(), window.api.getSystemInfo()]);
+  const has = (f) => info.engines.some((e) => e.flavour === f);
+  const nvidia = sys.gpu && sys.gpu.vendor === 'nvidia';
+  const parts = [];
+
+  if (engineProgress && engineProgress.phase !== 'idle') {
+    const p = engineProgress;
+    const pct = p.total ? Math.floor((p.done / p.total) * 100) : 0;
+    parts.push(`
+      <div class="engine-card">
+        <span class="su-spec-icon">${icon('hard-drive-download')}</span>
+        <span class="engine-card-text"><strong>${escapeHtml(t(p.phase === 'install' ? 'eng.installing' : 'eng.downloading', { name: t('eng.' + p.flavour) }))}</strong>
+          <span class="dl-bar"><span style="width:${pct}%"></span></span>
+          <small>${escapeHtml(t('eng.progress', { pct, done: Math.round(p.done / MB), total: Math.round(p.total / MB) }))}</small></span>
+        ${p.phase === 'download' ? `<button class="btn btn-ghost btn-sm" id="eng-cancel">${escapeHtml(t('np.cancel'))}</button>` : ''}
+      </div>`);
+  } else if (nvidia && !has('cuda12')) {
+    const size = engineUpdate && engineUpdate.sizes && engineUpdate.sizes.cuda12;
+    parts.push(`
+      <div class="engine-card">
+        <span class="su-spec-icon">${icon('sparkles')}</span>
+        <span class="engine-card-text"><strong>${escapeHtml(t('eng.nvidiaTitle'))}</strong>
+          <small>${escapeHtml(t('eng.nvidiaBody', { size: size ? Math.round(size / MB) : '~640' }))}</small></span>
+        <button class="btn btn-primary btn-sm" id="eng-get-cuda">${icon('download')}${escapeHtml(t('eng.download'))}</button>
+      </div>`);
+  }
+
+  // Which build runs, when there's a choice.
+  if (has('cuda12') && has('vulkan')) {
+    const cur = info.flavour === 'vulkan' ? 'vulkan' : 'cuda12';
+    parts.push(`
+      <div class="field engine-choice">
+        <label>${escapeHtml(t('eng.use'))}</label>
+        <div class="segmented" id="eng-flavour">
+          <button data-value="cuda12" class="${cur === 'cuda12' ? 'active' : ''}">${escapeHtml(t('eng.cuda12'))}</button>
+          <button data-value="vulkan" class="${cur === 'vulkan' ? 'active' : ''}">${escapeHtml(t('eng.vulkan'))}</button>
+        </div>
+      </div>`);
+  }
+
+  // Updates + Undo.
+  const active = info.engines.find((e) => e.id === info.active);
+  const sameFlavour = active ? info.engines.filter((e) => e.flavour === active.flavour).sort((a, b) => b.version - a.version) : [];
+  let upd = '';
+  if (engineUpdate && engineUpdate.ok && active) {
+    upd = engineUpdate.version > active.version
+      ? `<span class="eng-note">${escapeHtml(t('eng.updateAvail', { build: engineUpdate.build, stable: engineUpdate.stable }))}</span>
+         <button class="btn btn-primary btn-sm" id="eng-update">${icon('download')}${escapeHtml(t('eng.update'))}</button>`
+      : `<span class="eng-note ok">${icon('circle-check')}${escapeHtml(t('eng.upToDate', { build: active.build, stable: engineUpdate.stable }))}</span>`;
+  } else if (engineUpdate && !engineUpdate.ok) {
+    upd = `<span class="eng-note bad">${escapeHtml(t('eng.checkFailed'))}</span>`;
+  }
+  let undo = '';
+  if (info.pinned) {
+    undo = `<span class="eng-note">${escapeHtml(t('eng.pinned', { build: (active || {}).build || '' }))}</span>
+            <button class="btn btn-ghost btn-sm" id="eng-unpin">${escapeHtml(t('eng.useNewest'))}</button>`;
+  } else if (sameFlavour.length > 1 && active && active.id === sameFlavour[0].id) {
+    undo = `<button class="btn btn-ghost btn-sm" id="eng-undo" data-id="${escapeHtml(sameFlavour[1].id)}">${icon('arrow-left-right')}${escapeHtml(t('eng.undo', { build: sameFlavour[1].build }))}</button>`;
+  }
+  parts.push(`<div class="engine-row">
+      <button class="btn btn-ghost btn-sm" id="eng-check">${icon('refresh-cw')}${escapeHtml(t('eng.check'))}</button>${upd}${undo}</div>`);
+  box.innerHTML = parts.join('');
+}
+
+async function engineDownload(flavour) {
+  engineProgress = { flavour, phase: 'download', done: 0, total: 0 };
+  renderEngineActions();
+  const r = await window.api.engineDownload(flavour);
+  engineProgress = null;
+  if (r.ok) toast(t('eng.installed', { name: t('eng.' + flavour) }), 'success');
+  else if (r.error !== 'cancelled') toast(t('eng.failed', { msg: r.error }), 'error');
+  renderEngineLine();
+  renderEngineActions();
+}
+$('#engine-actions').addEventListener('click', async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.id === 'eng-get-cuda') engineDownload('cuda12');
+  else if (b.id === 'eng-cancel') window.api.engineCancel();
+  else if (b.id === 'eng-check') {
+    b.disabled = true;
+    engineUpdate = await window.api.engineCheckUpdate();
+    renderEngineActions();
+  } else if (b.id === 'eng-update') {
+    const info = await window.api.engineInfo();
+    const active = info.engines.find((x) => x.id === info.active);
+    engineDownload(active && active.flavour === 'cuda12' ? 'cuda12' : 'vulkan');
+  } else if (b.id === 'eng-undo') {
+    await window.api.engineUse({ pin: b.dataset.id });
+    toast(t('eng.undone'), 'success');
+    renderEngineLine(); renderEngineActions();
+  } else if (b.id === 'eng-unpin') {
+    await window.api.engineUse({ pin: null });
+    renderEngineLine(); renderEngineActions();
+  } else if (b.closest('#eng-flavour') && b.dataset.value) {
+    await window.api.engineUse({ flavour: b.dataset.value });
+    renderEngineLine(); renderEngineActions();
+  }
+});
+window.api.onEngineProgress((p) => {
+  engineProgress = p.phase === 'idle' ? null : p;
+  if ($('#view-settings').classList.contains('active')) renderEngineActions();
+});
+
+async function renderModelsPanel(refresh = false) {
+  if (!$('#models-panel')) return;
+  renderEngineLine();
+  renderEngineActions();
+  const folders = await window.api.getModelFolders();
+  $('#folder-list').innerHTML = folders.map((f) => `
+    <li><span class="folder-icon">${icon('folder')}</span><span class="folder-path" dir="ltr">${escapeHtml(f)}</span>
+      <button class="icon-btn js-rmfolder" data-folder="${escapeHtml(f)}" title="${escapeHtml(t('mdl.removeFolder'))}">${icon('x')}</button></li>`).join('');
+  const list = $('#model-list');
+  if (!folders.length) { list.innerHTML = `<p class="settings-note">${escapeHtml(t('mdl.noFolders'))}</p>`; return; }
+  list.innerHTML = `<div class="su-loading"><span class="spinner"></span>${escapeHtml(t('mdl.scanning'))}</div>`;
+  const models = await getModelFiles(refresh);
+  const s = await window.api.getSettings();
+  list.innerHTML = models.length ? models.map((m) => `
+    <div class="model-row">
+      <span class="model-text"><strong dir="auto">${escapeHtml(m.name)}</strong>
+        <small>${escapeHtml([m.params, m.quant, m.sizeGB + ' GB'].filter(Boolean).join(' · '))} · <span dir="ltr">${escapeHtml(m.folder)}</span></small></span>
+      <span class="fit-badge fit-${m.fit}">${icon(FIT_ICON[m.fit])}${escapeHtml(t('fit.' + m.fit + 'Short'))}</span>
+      ${s.provider === 'builtin' && s.model === m.path
+        ? `<span class="model-default">${icon('check')}${escapeHtml(t('mdl.isDefault'))}</span>`
+        : `<button class="btn btn-ghost btn-sm js-usemodel" data-path="${escapeHtml(m.path)}">${escapeHtml(t('mdl.useDefault'))}</button>`}
+    </div>`).join('') : `<p class="settings-note">${escapeHtml(t('mdl.noneInFolders'))}</p>`;
+}
+async function addModelFolder(dir) {
+  const r = await window.api.addModelFolder(dir);
+  if (!r) return; // cancelled
+  if (r.error) { toast(t('mdl.notFolder'), 'error'); return; }
+  modelFilesCache = null;
+  await renderModelsPanel(true);
+  const n = (await getModelFiles()).length;
+  toast(t('mdl.added', { n }), 'success');
+}
+$('#folder-add').addEventListener('click', () => addModelFolder());
+$('#models-rescan').addEventListener('click', () => { modelFilesCache = null; renderModelsPanel(true); });
+$('#models-panel').addEventListener('click', async (e) => {
+  const rm = e.target.closest('.js-rmfolder');
+  if (rm) { await window.api.removeModelFolder(rm.dataset.folder); modelFilesCache = null; renderModelsPanel(true); return; }
+  const use = e.target.closest('.js-usemodel');
+  if (use) {
+    await window.api.saveSettings({ provider: 'builtin', model: use.dataset.path });
+    toast(t('mdl.defaultSet'), 'success');
+    renderSettings();
+  }
+});
+// Drop a folder (or a .gguf inside one) onto the panel, or onto Setup.
+function wireFolderDrop(el, after) {
+  el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    el.classList.remove('drag');
+    for (const f of Array.from(e.dataTransfer.files || [])) {
+      let p = window.api.pathForFile(f);
+      if (/\.gguf$/i.test(p)) p = p.replace(/[\\/][^\\/]+$/, ''); // a model file: use its folder
+      if (p) await addModelFolder(p);
+    }
+    if (after) after();
+  });
+}
+wireFolderDrop($('#folder-drop'));
+// Stop the window from opening files dropped anywhere else.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
+window.api.onBuiltinStatus((st) => {
+  builtinState = st;
+  if ($('#view-settings').classList.contains('active')) renderEngineLine();
+});
+window.api.builtinStatus().then((st) => { builtinState = st; });
 
 // ---- Keyboard shortcuts -----------------------------------------------------
 // [keys, label key, where]. The help window (F1) is built from this list.

@@ -14,9 +14,10 @@ solid for experts. Read its `CLAUDE.md` and code when porting an idea (files lis
 
 ```bash
 npm install
-npm start          # run in dev
-npm run dist       # dist/ProseArc-Setup-<v>.exe + ProseArc-<v>-portable.exe (electron-builder)
-node --check main.js renderer.js preload.js src/*.js   # the only checks today: there are no tests yet
+npm start          # run in dev (or double-click start.bat: installs packages + fetches the engine first)
+npm run fetch-engine   # llama.cpp Vulkan build of the current stable release → vendor/llama (git-ignored, checked)
+npm run dist       # fetch-engine, then dist/ProseArc-Setup-<v>.exe + portable exe (engine bundled as resources/llama)
+node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js   # the only checks: no tests yet
 ```
 
 ## GitHub and privacy
@@ -37,22 +38,37 @@ node --check main.js renderer.js preload.js src/*.js   # the only checks today: 
 - `main.js` — window, IPC handlers (`projects:*`, `cover:*`, `glossary:*`, `settings:*`, `secrets:*`,
   `manuscript:pick`, `export:project`, `engine:*`), electron-updater check on start.
 - `preload.js` — the bridge the renderer uses. `renderer.js` — all UI (library, book hub, workspace, review,
-  reader, glossary, settings). `index.html`, `styles.css`, `i18n.js` (English + Arabic table).
+  reader, glossary, settings, models panel, shortcuts). `setup.js` — first-run Setup wizard. `icons.js` — Lucide
+  icons (ISC) used as `icon(name)` / `<i data-icon>`; add new ones from `lucide-static`. `index.html`,
+  `styles.css` (tokens in `:root`, sections appended per step), `i18n.js` (English + Arabic table).
 - `src/engine.js` — the translation run: provider → HTTP request (OpenAI shape, Anthropic native), streaming,
   timeout + retry, resumable. `src/prompt.js` — messages per segment (style brief, glossary terms found in the
   segment, continuity context). `src/segmenter.js`, `src/store.js` (projects as JSON, atomic saves, settings,
   API keys in their own file — plain text today), importers `epub.js`, `docx.js`, `pdf.js`, `html-to-blocks.js`,
   `src/exporter.js`.
-- Data: `%APPDATA%\prosearc\` (`projects\`, `glossary-global.json`, settings, keys).
-- Providers today: `local` (LM Studio / any OpenAI-compatible URL, default `http://localhost:1234`), `openai`,
-  `openrouter`, `gemini`, `anthropic`, `compatible`.
+- Built-in translator (step 3): `src/llama.js` runs `llama-server` hidden on 127.0.0.1 with a free port (one
+  model, `-np 1 --no-mmproj --no-webui --reasoning-budget 0` unless thinking is on), stops on quit;
+  `src/llama-release.js` follows llama.cpp's stable release (`releases/latest` only carries `nightly-tag.txt`
+  naming the build, e.g. v0.8.0 → b11960), downloads zips checked against GitHub's SHA-256 digest, unzips with
+  Windows' `tar.exe`. Bundled build in `vendor/llama` (dev) / `resources/llama` (installed); downloads (NVIDIA
+  CUDA 12, updates) in `%APPDATA%\prosearc\engine\<flavour>-<build>`; Undo pins the previous build.
+  `src/models.js` scans the user's model folders recursively for `.gguf` (skips mmproj/split parts), reads the
+  GGUF header, rates fit. `src/hardware.js` (GPU + VRAM from the display-adapter registry keys, RAM, CPU),
+  `src/local-servers.js` (finds LM Studio / Ollama).
+- Data: `%APPDATA%\prosearc\` (`projects\`, `glossary-global.json`, settings, keys, `app-config.json` for
+  model folders + engine choice, `engine\`).
+- Providers today: `builtin` (model = path to a .gguf), `local` (LM Studio / Ollama / any OpenAI-compatible URL;
+  sends `reasoning_effort: "none"` unless thinking is on), `openai`, `openrouter`, `gemini`, `anthropic`,
+  `compatible`.
+- The user's models for testing: `E:\Ai\lm-studio\models` (LM Studio layout, publisher/model/file.gguf). Use
+  them in place; never copy or download multi-GB models for tests. No Ollama on this PC.
 
 ## Where we left off (2026-11-02)
 
-- Uncommitted on `main` (from July): continuity context now sends source ⇢ translation pairs plus a 2-segment
+- Parked in `git stash` (from July; was uncommitted on `main`): continuity context now sends source ⇢ translation pairs plus a 2-segment
   look-ahead, and asks the model to settle "you" (singular/plural, gender) from that context (`src/prompt.js`,
   label/hint in `i18n.js` + `index.html`). Not tested in a run yet. The user said to skip it for now: leave it
-  alone unless they bring it up. If it is ever committed, remove the comment in `prompt.js` that quotes a line
+  alone and don't list it as an open item unless they bring it up. If it is ever committed, remove the comment in `prompt.js` that quotes a line
   from the test book first.
 - The user finds the app good but busy for someone new, and plain-looking next to Subloc ("looks meh"; it was
   built before they cared about looks). They want it to look and feel as easy and solid as Subloc.

@@ -59,21 +59,44 @@ function suGo(delta) {
   $('#su-body').scrollTop = 0;
 }
 
-async function suDetect() {
+async function suDetect(refreshModels = false) {
   su.servers = null;
   renderSetup();
-  su.servers = await window.api.detectLocalServers();
-  // Pick the first running server, and its loaded model.
-  if (!su.local.server || !su.servers.find((s) => s.id === su.local.server && s.running)) {
+  const [servers, engines, models] = await Promise.all([
+    window.api.detectLocalServers(), window.api.builtinEngines(), getModelFiles(refreshModels),
+  ]);
+  su.servers = servers;
+  su.engines = engines;
+  su.builtinModels = models;
+  const valid = (id) => (id === 'builtin' ? su.engines.length > 0 : su.servers.some((s) => s.id === id && s.running));
+  if (!su.local.server || !valid(su.local.server)) {
+    // Prefer the built-in translator when there's a model for it; else a running app.
     const first = su.servers.find((s) => s.running);
-    su.local.server = first ? first.id : null;
-    su.local.model = first ? ((first.models.find((m) => m.loaded) || first.models[0] || {}).id || '') : '';
+    if (su.engines.length && su.builtinModels.length) su.local.server = 'builtin';
+    else su.local.server = first ? first.id : (su.engines.length ? 'builtin' : null);
+    su.local.model = '';
+  }
+  if (su.local.server === 'builtin' && !su.builtinModels.some((m) => m.path === su.local.model)) {
+    su.local.model = suBestModel();
+  } else if (su.local.server !== 'builtin' && !su.local.model) {
+    const srv = su.servers.find((s) => s.id === su.local.server);
+    su.local.model = srv ? ((srv.models.find((m) => m.loaded) || srv.models[0] || {}).id || '') : '';
   }
   renderSetup();
 }
 
+// The largest model that fits the graphics card; else the smallest one.
+function suBestModel() {
+  const ms = su.builtinModels || [];
+  const fits = ms.filter((m) => m.fit === 'fits').sort((a, b) => b.sizeGB - a.sizeGB);
+  return (fits[0] || ms.slice().sort((a, b) => a.sizeGB - b.sizeGB)[0] || {}).path || '';
+}
+
 // The AI settings the user picked, in project/settings shape.
 function suAiConfig() {
+  if (su.mode === 'local' && su.local.server === 'builtin') {
+    return { provider: 'builtin', model: su.local.model || '', thinking: su.thinking };
+  }
   if (su.mode === 'local') {
     const srv = (su.servers || []).find((s) => s.id === su.local.server);
     return { provider: 'local', apiUrl: srv ? srv.url : '', model: su.local.model || '', thinking: su.thinking };
@@ -128,7 +151,7 @@ function suCanNext() {
   if (name === 'pc') return !!su.sys;
   if (name === 'choose') return !!su.mode;
   if (name === 'connect') {
-    if (su.mode === 'local') return !!su.local.server;
+    if (su.mode === 'local') return su.local.server === 'builtin' ? !!su.local.model : !!su.local.server;
     const o = su.online;
     if (o.provider === 'compatible') return !!o.baseUrl.trim() && !!o.model.trim();
     return !!o.key.trim() && !!o.model.trim();
@@ -222,13 +245,30 @@ function suConnect() {
 
 function suConnectLocal() {
   const head = `<h2 id="su-title">${t('su.localTitle')}</h2><p class="su-lede">${t('su.localLede')}</p>`;
-  const builtIn = `
+  if (!su.servers) return `${head}<div class="su-loading"><span class="spinner"></span>${t('su.looking')}</div>`;
+  const bSel = su.local.server === 'builtin';
+  const bModels = su.builtinModels || [];
+  const bm = bModels.find((m) => m.path === su.local.model);
+  const builtIn = !su.engines.length ? `
     <div class="su-server disabled">
       <span class="su-server-icon"><i data-icon="sparkles"></i></span>
-      <span class="su-server-text"><strong>${t('su.builtIn')}</strong><span>${t('su.builtInSoon')}</span></span>
-      <span class="su-pill">${t('su.soon')}</span>
+      <span class="su-server-text"><strong>${t('su.builtIn')}</strong><span>${t('mdl.noEngine')}</span></span>
+    </div>` : `
+    <div class="su-server ${bSel ? 'selected' : ''}" data-server="builtin" role="button" tabindex="0" id="su-builtin">
+      <span class="su-server-icon"><i data-icon="sparkles"></i></span>
+      <span class="su-server-text"><strong>${t('su.builtIn')}</strong>
+        <span>${bModels.length ? t('su.builtInFound', { n: bModels.length }) : t('su.builtInNoModels')}</span></span>
+      <span class="su-pill rec">${t('su.recommended')}</span>
+      ${bSel ? `
+        <div class="field su-model">
+          ${bModels.length ? `
+            <label for="su-bmodel">${t('f.bmodel')}</label>
+            <select id="su-bmodel">${bModels.map((m) => `<option value="${escapeHtml(m.path)}" ${m.path === su.local.model ? 'selected' : ''}>${escapeHtml(modelLabel(m))}</option>`).join('')}</select>
+            ${bm ? `<p class="settings-note fit-note fit-${bm.fit}">${icon(FIT_ICON[bm.fit])}<span>${t('fit.' + bm.fit)}</span></p>` : ''}` : ''}
+          <div class="su-drop" id="su-drop">${icon('folder-plus')}<span>${t('su.dropFolder')}</span>
+            <button class="btn btn-ghost btn-sm" id="su-addfolder">${t('mdl.addFolder')}</button></div>
+        </div>` : ''}
     </div>`;
-  if (!su.servers) return `${head}${builtIn}<div class="su-loading"><span class="spinner"></span>${t('su.looking')}</div>`;
   const rows = su.servers.map((s) => {
     const sel = su.local.server === s.id;
     const loaded = s.models.filter((m) => m.loaded);
@@ -293,7 +333,7 @@ function suTest() {
   const tst = su.test;
   const rtl = isRtlLang(su.langs.target);
   let out;
-  if (!tst || tst.busy) out = `<div class="su-loading"><span class="spinner"></span>${t('su.testing')}</div>`;
+  if (!tst || tst.busy) out = `<div class="su-loading"><span class="spinner"></span>${t(suAiConfig().provider === 'builtin' ? 'su.testingBuiltin' : 'su.testing')}</div>`;
   else if (tst.ok) out = `
       <div class="su-result" dir="${rtl ? 'rtl' : 'auto'}">${escapeHtml(tst.text)}</div>
       <div class="su-verdict good">${icon('circle-check')}<span>${t('su.testOk', { sec: (tst.ms / 1000).toFixed(1) })}</span></div>`;
@@ -310,7 +350,9 @@ function suTest() {
 
 function suDone() {
   const ai = suAiConfig();
-  const where = ai.provider === 'local'
+  const where = ai.provider === 'builtin'
+    ? `${t('su.builtIn')} · ${((su.builtinModels || []).find((m) => m.path === ai.model) || {}).name || ''}`
+    : ai.provider === 'local'
     ? `${((su.servers || []).find((s) => s.id === su.local.server) || {}).name || ''}${ai.model ? ' · ' + ai.model : ''}`
     : `${(SU_PROVIDERS.find((p) => p.id === ai.provider) || {}).name || ''}${ai.model ? ' · ' + ai.model : ''}`;
   return `
@@ -346,6 +388,15 @@ function wireSetupBody(name) {
     body.querySelectorAll('.su-server[data-server]').forEach((row) => {
       const pick = (e) => {
         if (e.target.closest('select, a')) return;
+        if (e.target.closest('button, .su-drop')) return;
+        if (row.dataset.server === 'builtin') {
+          if (su.local.server === 'builtin') return;
+          su.local.server = 'builtin';
+          su.local.model = suBestModel();
+          su.test = null;
+          renderSetup();
+          return;
+        }
         const srv = su.servers.find((s) => s.id === row.dataset.server);
         if (!srv || !srv.running || su.local.server === srv.id) return;
         su.local.server = srv.id;
@@ -357,6 +408,10 @@ function wireSetupBody(name) {
       row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(e); } });
     });
     on('#su-model', 'change', (e) => { su.local.model = e.target.value; su.test = null; });
+    on('#su-bmodel', 'change', (e) => { su.local.model = e.target.value; su.test = null; renderSetup(); });
+    on('#su-addfolder', 'click', async (e) => { e.stopPropagation(); await addModelFolder(); await suDetect(true); });
+    const drop = body.querySelector('#su-builtin');
+    if (drop) wireFolderDrop(drop, () => suDetect(true));
     on('#su-recheck', 'click', suDetect);
     on('#su-thinking', 'change', (e) => { su.thinking = e.target.checked; su.test = null; });
   }

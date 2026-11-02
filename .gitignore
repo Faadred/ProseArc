@@ -13,3 +13,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.pdf
+
+# llama.cpp engine fetched by scripts/fetch-llama.js (bundled at build time)
+vendor/
