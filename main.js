@@ -3,7 +3,7 @@
 // over IPC (inter-process communication). The renderer can't touch the disk
 // directly; it calls these handlers through the preload bridge.
 
-const { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, shell, safeStorage } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fsp = require('fs/promises');
@@ -23,6 +23,7 @@ const { createBuiltin } = require('./src/llama');
 const llamaRelease = require('./src/llama-release');
 const hub = require('./src/hub');
 const { downloadFile } = require('./src/download');
+const providers = require('./src/providers');
 
 let store;  // initialised once the app is ready and userData path is known.
 let engine; // translation engine, created alongside the store.
@@ -261,6 +262,14 @@ function registerIpc() {
   ipcMain.handle('engine:sample', (_e, cfg) => engine.sampleTranslate(cfg || {}));
   ipcMain.handle('engine:listModels', (_e, cfg) => engine.listModels(cfg || {}));
 
+  // Providers page: the list, and which ones are set up.
+  ipcMain.handle('providers:list', async () => {
+    const s = await store.getSecrets();
+    const configured = {};
+    for (const p of providers.PROVIDERS) configured[p.id] = providers.isConfigured(p.id, s);
+    return { providers: providers.PROVIDERS, configured, encrypted: safeStorage.isEncryptionAvailable() };
+  });
+
   // First-run Setup: what this PC can run, and AI apps already running on it.
   ipcMain.handle('system:info', () => getSystemInfo());
   ipcMain.handle('local:detect', () => detectLocalServers());
@@ -476,7 +485,13 @@ app.whenReady().then(() => {
   // userData is the OS-specific per-app data folder (safe, writable, persists
   // across app updates). Projects live in a subfolder of it.
   migrateLegacyUserData();
-  store = createStore(path.join(app.getPath('userData'), 'projects'));
+  // API keys are encrypted with Windows' DPAPI (only this Windows user can read them).
+  const protect = {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (buf) => safeStorage.decryptString(buf),
+  };
+  store = createStore(path.join(app.getPath('userData'), 'projects'), protect);
   builtin = createBuiltin({ app, store });
   engine = createEngine({ store, builtin });
   // Tell every window when the built-in translator starts, loads, fails or stops.

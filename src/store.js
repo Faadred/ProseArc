@@ -16,7 +16,7 @@ const { segment, segmentBlocks } = require('./segmenter');
 const SCHEMA_VERSION = 2; // v2: segments carry a structural `type` (heading/paragraph/…)
 
 const DEFAULTS = {
-  provider: 'local',        // 'local' | 'openai' | 'openrouter' | 'gemini' | 'anthropic' | 'compatible'
+  provider: 'builtin',      // an id from src/providers.js ('local' = a URL from older versions)
   sourceLang: 'English',
   targetLang: 'Arabic',
   apiUrl: 'http://localhost:1234/v1/chat/completions', // LM Studio default (used by 'local')
@@ -26,9 +26,12 @@ const DEFAULTS = {
 };
 
 // API keys for cloud providers — stored separately from projects, never exported.
-const SECRET_KEYS = ['openai', 'openrouter', 'gemini', 'anthropic', 'compatible', 'compatibleBaseUrl'];
+const { SECRET_FIELDS } = require('./providers');
+const SECRET_KEYS = SECRET_FIELDS;
 
-function createStore(projectsDir) {
+// `protect` (from main.js) encrypts the secrets file with Electron's safeStorage
+// (Windows DPAPI: only this Windows user can read it). Without it, plain JSON.
+function createStore(projectsDir, protect = null) {
   // Make sure the directory exists once, up front.
   fs.mkdirSync(projectsDir, { recursive: true });
 
@@ -274,22 +277,41 @@ function createStore(projectsDir) {
     return next;
   }
 
-  async function getSecrets() {
-    try {
-      const raw = JSON.parse(await fsp.readFile(secretsPath, 'utf8'));
-      const clean = {};
-      for (const k of SECRET_KEYS) if (raw[k] !== undefined) clean[k] = raw[k];
-      return clean;
-    } catch {
-      return {};
+  // Secrets file: { v: 2, enc: base64 } when encrypted; older files are plain
+  // { key: value } and get encrypted the first time they're read.
+  async function readSecretsRaw() {
+    let raw;
+    try { raw = JSON.parse(await fsp.readFile(secretsPath, 'utf8')); } catch { return {}; }
+    if (raw && raw.v === 2 && typeof raw.enc === 'string') {
+      if (!protect) return {};
+      try { return JSON.parse(protect.decrypt(Buffer.from(raw.enc, 'base64'))); } catch { return {}; }
+    }
+    if (raw && raw.v === 2 && raw.plain) return raw.plain;
+    // Plain file from before encryption: upgrade it in place.
+    const clean = {};
+    for (const k of SECRET_KEYS) if (raw && raw[k] !== undefined) clean[k] = String(raw[k]);
+    if (protect && protect.available()) await writeSecretsRaw(clean);
+    return clean;
+  }
+  async function writeSecretsRaw(obj) {
+    if (protect && protect.available()) {
+      await atomicWrite(secretsPath, { v: 2, enc: protect.encrypt(JSON.stringify(obj)).toString('base64') });
+    } else {
+      await atomicWrite(secretsPath, { v: 2, plain: obj });
     }
   }
-
-  /** Atomically save cloud API keys (only known keys are kept). */
-  async function saveSecrets(input) {
+  async function getSecrets() {
+    const raw = await readSecretsRaw();
     const clean = {};
+    for (const k of SECRET_KEYS) if (raw[k] !== undefined) clean[k] = raw[k];
+    return clean;
+  }
+  // Merge: saving one provider's key keeps the others.
+  async function saveSecrets(input) {
+    const clean = await getSecrets();
     for (const k of SECRET_KEYS) if (input && input[k] !== undefined) clean[k] = String(input[k]);
-    await atomicWrite(secretsPath, clean);
+    for (const k of Object.keys(clean)) if (clean[k] === '') delete clean[k];
+    await writeSecretsRaw(clean);
     return clean;
   }
 

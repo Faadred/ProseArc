@@ -1622,3 +1622,72 @@ kbd {
 .mh-dest-line { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); color: var(--muted); min-width: 0; }
 #mh-dest { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
 @media (max-width: 860px) { .mh-cols { grid-template-columns: 1fr; grid-template-rows: 40% 1fr; } .mh-results { border-inline-end: none; border-bottom: 1px solid var(--line); } }
+
+/* ============================================================================
+   Step 5: Settings tabs, Providers page and panel
+   ========================================================================== */
+.tabs { display: flex; gap: var(--s-1); border-bottom: 1px solid var(--line); margin: calc(-1 * var(--s-3)) 0 var(--s-5); }
+.tabs button {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  padding: 10px 16px; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: transparent; color: var(--muted); font-family: var(--font-ui); font-size: var(--fs-md); font-weight: 500; cursor: pointer;
+  transition: color var(--ease), border-color var(--ease);
+}
+.tabs button .icon { width: 17px; height: 17px; }
+.tabs button:hover { color: var(--text); }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.tabs button.active .icon { color: var(--accent); }
+.tab-page.settings-grid[hidden] { display: none !important; }
+.tab-page[data-page="builtin"] .models-panel { max-width: 1100px; }
+
+.pv-toolbar { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; margin-bottom: var(--s-4); }
+#pv-search {
+  flex: 1; min-width: 220px; max-width: 420px; padding: 10px 14px; font-size: var(--fs-md); font-family: var(--font-ui);
+  background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+#pv-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.pv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: var(--s-3); }
+.pv-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3);
+  padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: var(--surface); color: var(--text); font-family: var(--font-ui); text-align: start; cursor: pointer;
+  transition: border-color var(--ease), background var(--ease), transform var(--ease);
+}
+.pv-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--surface-2); transform: translateY(-1px); }
+.pv-card.is-on { border-color: color-mix(in srgb, var(--status-reviewed) 40%, var(--line)); }
+.pv-logo {
+  width: 44px; height: 44px; flex-shrink: 0; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-3); color: var(--text);
+}
+.plogo { width: 24px; height: 24px; }
+.plogo-letters { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; }
+.pv-card-text { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.pv-card-text strong { font-size: 1.02rem; font-weight: 600; }
+.pv-card-text small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }
+.pv-card-foot { display: flex; align-items: center; gap: var(--s-2); }
+.pv-badge {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-3); color: var(--muted); font-size: var(--fs-xs); font-weight: 600;
+}
+.pv-badge .icon { width: 13px; height: 13px; }
+.pv-badge.on { background: color-mix(in srgb, var(--status-reviewed) 16%, transparent); color: var(--status-reviewed); }
+.pv-default { padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: var(--fs-xs); font-weight: 600; }
+.pv-safe { display: flex; align-items: center; gap: 6px; margin-top: var(--s-5); }
+.pv-safe .icon { width: 15px; height: 15px; color: var(--status-reviewed); flex-shrink: 0; }
+
+.pv-modal { width: min(620px, 94vw); max-height: 88vh; overflow-y: auto; }
+.pv-head { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-5); }
+.pv-head-text { flex: 1; }
+.pv-head h2 { margin: 0; }
+.pv-head small { color: var(--muted); }
+.pv-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin: var(--s-2) 0 var(--s-4); }
+.pv-modal .su-verdict { margin-bottom: var(--s-3); }
+.pv-models-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-3); }
+.pv-models-head input { padding: 7px 10px; font-family: var(--font-ui); background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.pv-models { max-height: 260px; overflow-y: auto; margin-top: var(--s-2); border: 1px solid var(--line); border-radius: var(--r-md); }
+.pv-model { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 0.95rem; }
+.pv-model:last-child { border-bottom: none; }
+.pv-model span { overflow-wrap: anywhere; }
+#ws-provider-note { cursor: pointer; color: var(--accent); }
+.pv-badge.bad { background: var(--danger-soft); color: var(--danger); }

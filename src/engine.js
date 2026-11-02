@@ -9,6 +9,7 @@
 // renderer can render them in the user's chosen UI language.
 
 const { buildMessages } = require('./prompt');
+const { byId: providerById, baseUrlFor } = require('./providers');
 
 const REQUEST_TIMEOUT_MS = 120000; // give up on a single request after 2 min
 const MAX_RETRIES = 2;             // ...then retry up to twice
@@ -39,17 +40,18 @@ function createEngine({ store, builtin }) {
   // Turn a project + messages into a provider-specific HTTP request.
   // Most providers speak the OpenAI chat-completions shape; Anthropic is native.
   function resolveRequest(project, messages) {
-    const provider = project.provider || 'local';
+    const provider = project.provider || 'lmstudio';
     const model = (project.model || '').trim();
     const s = activeSecrets || {};
+    const p = providerById[provider];
 
-    if (provider === 'anthropic') {
+    if (p && p.native === 'anthropic') {
       const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
       const rest = messages.filter((m) => m.role !== 'system').map((m) => ({ role: m.role, content: m.content }));
       return {
-        url: 'https://api.anthropic.com/v1/messages',
+        url: `${baseUrlFor('anthropic', s)}/messages`,
         headers: { 'Content-Type': 'application/json', 'x-api-key': s.anthropic || '', 'anthropic-version': '2023-06-01' },
-        body: { model: model || 'claude-3-5-sonnet-latest', max_tokens: 4096, temperature: 0.3, ...(system ? { system } : {}), messages: rest },
+        body: { model: model || 'claude-sonnet-4-5', max_tokens: 4096, temperature: 0.3, ...(system ? { system } : {}), messages: rest },
         shape: 'anthropic',
         missingKey: !s.anthropic,
       };
@@ -58,26 +60,26 @@ function createEngine({ store, builtin }) {
     const headers = { 'Content-Type': 'application/json' };
     let url;
     let missingKey = false;
-    if (provider === 'openai') { url = 'https://api.openai.com/v1/chat/completions'; headers.Authorization = `Bearer ${s.openai || ''}`; missingKey = !s.openai; }
-    else if (provider === 'openrouter') { url = 'https://openrouter.ai/api/v1/chat/completions'; headers.Authorization = `Bearer ${s.openrouter || ''}`; missingKey = !s.openrouter; }
-    else if (provider === 'gemini') { url = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'; headers.Authorization = `Bearer ${s.gemini || ''}`; missingKey = !s.gemini; }
-    else if (provider === 'compatible') { url = `${(s.compatibleBaseUrl || '').replace(/\/+$/, '')}/chat/completions`; if (s.compatible) headers.Authorization = `Bearer ${s.compatible}`; missingKey = !s.compatibleBaseUrl; }
-    else if (provider === 'builtin') { url = builtin ? builtin.url() : ''; } // ProseArc's own llama-server
-    else { url = project.apiUrl; } // local
+    if (provider === 'builtin') {
+      url = builtin ? builtin.url() : ''; // ProseArc's own llama-server
+    } else if (provider === 'local') {
+      url = project.apiUrl;              // books from before step 5: a full chat-completions URL
+    } else if (p) {
+      url = `${baseUrlFor(provider, s)}/chat/completions`;
+      if (p.kind === 'cloud') { headers.Authorization = `Bearer ${s[provider] || ''}`; missingKey = !s[provider]; }
+      if (p.kind === 'custom') { if (s.compatible) headers.Authorization = `Bearer ${s.compatible}`; missingKey = !s.compatibleBaseUrl; }
+    } else {
+      url = '';
+    }
 
     const body = { model: model || 'local-model', messages, temperature: 0.3, stream: false };
     // Thinking models spend most of their time reasoning before each passage,
-    // which plain translation rarely needs. Off by default for local models
+    // which plain translation rarely needs. Off by default for local apps
     // (LM Studio honours reasoning_effort "none"); the project can turn it on.
-    if (provider === 'local' && !project.thinking && !noReasoningParam.has(url)) body.reasoning_effort = 'none';
+    const localApp = provider === 'local' || (p && p.kind === 'local');
+    if (localApp && !project.thinking && !noReasoningParam.has(url)) body.reasoning_effort = 'none';
 
-    return {
-      url,
-      headers,
-      body,
-      shape: 'openai',
-      missingKey,
-    };
+    return { url, headers, body, shape: 'openai', missingKey };
   }
 
   /** One translation request. Throws tagged errors for the retry/friendly layers. */
@@ -96,10 +98,15 @@ function createEngine({ store, builtin }) {
     });
     // A server that doesn't know the "no thinking" switch may answer 400:
     // retry once without it, and don't send it to that server again.
+    // Only when the error is about that switch: a 400 can mean other things
+    // (e.g. LM Studio's "No models loaded").
     if (res.status === 400 && req.body.reasoning_effort) {
-      noReasoningParam.add(req.url);
-      delete req.body.reasoning_effort;
-      res = await fetch(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body), signal });
+      const text = await res.clone().text().catch(() => '');
+      if (/reason/i.test(text)) {
+        noReasoningParam.add(req.url);
+        delete req.body.reasoning_effort;
+        res = await fetch(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body), signal });
+      }
     }
 
     if (!res.ok) {
@@ -175,6 +182,8 @@ function createEngine({ store, builtin }) {
     if (err.timeout) return { key: 'timeout', params: { sec: Math.round(REQUEST_TIMEOUT_MS / 1000) } };
     if (code === 'ECONNREFUSED' || /fetch failed/i.test(err.message)) return { key: 'unreachable', params: {} };
     if (err.httpStatus === 404) return { key: 'http404', params: {} };
+    if (err.httpStatus === 400 && /no models? (is )?loaded/i.test(err.detail || '')) return { key: 'noModelLoaded', params: {} };
+    if (err.httpStatus === 401 || err.httpStatus === 403) return { key: 'badKey', params: {} };
     if (err.httpStatus) return { key: 'http', params: { status: err.httpStatus, detail: err.detail || '' } };
     if (err.empty) return { key: 'empty', params: {} };
     return { key: 'generic', params: { msg: err.message } };
@@ -373,21 +382,23 @@ function createEngine({ store, builtin }) {
   }
 
   /**
-   * List a cloud provider's models with the given key (for suggestions in Setup).
-   * cfg: { provider, key, baseUrl } → { ok: true, models: [ids] } or { ok: false, status }
+   * List a provider's models (Providers panel Test, model pickers, Setup).
+   * cfg: { provider, key?, baseUrl? } — values not given come from the saved settings.
+   * → { ok: true, models: [ids] } or { ok: false, status } (status 0 = unreachable)
    */
   async function listModels(cfg) {
-    const key = (cfg.key || '').trim();
-    const urls = {
-      openai: 'https://api.openai.com/v1/models',
-      openrouter: 'https://openrouter.ai/api/v1/models',
-      gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/models',
-      anthropic: 'https://api.anthropic.com/v1/models?limit=100',
-      compatible: `${(cfg.baseUrl || '').replace(/\/+$/, '')}/models`,
-    };
-    const url = urls[cfg.provider];
-    if (!url || (cfg.provider === 'compatible' && !cfg.baseUrl)) return { ok: false, status: 0 };
-    const headers = cfg.provider === 'anthropic'
+    const id = cfg.provider;
+    const p = providerById[id];
+    if (!p || p.kind === 'builtin') return { ok: false, status: 0 };
+    const saved = await store.getSecrets();
+    const s = { ...saved };
+    if (cfg.key !== undefined) s[id] = cfg.key;
+    if (cfg.baseUrl !== undefined) s[`${id}BaseUrl`] = cfg.baseUrl;
+    const base = baseUrlFor(id, s);
+    if (!base) return { ok: false, status: 0 };
+    const key = (s[id] || '').trim();
+    const url = p.native === 'anthropic' ? `${base}/models?limit=100` : `${base}/models`;
+    const headers = p.native === 'anthropic'
       ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
       : (key ? { Authorization: `Bearer ${key}` } : {});
     const ac = new AbortController();
@@ -396,7 +407,9 @@ function createEngine({ store, builtin }) {
       const res = await fetch(url, { headers, signal: ac.signal });
       if (!res.ok) return { ok: false, status: res.status };
       const json = await res.json();
-      const ids = (Array.isArray(json.data) ? json.data : []).map((m) => String(m.id || '').replace(/^models\//, '')).filter(Boolean);
+      const list = Array.isArray(json.data) ? json.data : (Array.isArray(json.models) ? json.models : []);
+      const ids = list.map((m) => String(m.id || m.name || '').replace(/^models\//, '')).filter(Boolean)
+        .filter((m) => !/embed|whisper|tts|rerank|moderation|dall-e|image|audio|realtime|transcribe/i.test(m));
       return { ok: true, models: ids };
     } catch {
       return { ok: false, status: 0 };

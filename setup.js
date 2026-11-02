@@ -7,13 +7,13 @@ const SU_STEPS = ['welcome', 'pc', 'choose', 'connect', 'test', 'done'];
 const SU_SAMPLE = 'The rain had not stopped for three days. She stood at the window, counting the boats that had not come home.';
 
 // Online providers offered in Setup (step 5 brings a fuller Providers page).
-const SU_PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', keyUrl: 'https://platform.openai.com/api-keys' },
-  { id: 'anthropic', name: 'Claude (Anthropic)', keyUrl: 'https://console.anthropic.com/settings/keys' },
-  { id: 'gemini', name: 'Google Gemini', keyUrl: 'https://aistudio.google.com/apikey' },
-  { id: 'openrouter', name: 'OpenRouter', keyUrl: 'https://openrouter.ai/keys' },
-  { id: 'compatible', name: 'OpenAI‑compatible', keyUrl: '' },
-];
+// Online providers offered in Setup: the cloud ones from the Providers list.
+let SU_PROVIDERS = [];
+async function loadSuProviders() {
+  const { providers } = await loadProviders();
+  SU_PROVIDERS = providers.filter((p) => p.kind === 'cloud' || p.kind === 'custom')
+    .map((p) => ({ id: p.id, name: providerName(p), keyUrl: p.keyUrl || '' }));
+}
 
 const su = {
   step: 0,
@@ -30,6 +30,7 @@ const su = {
 };
 
 async function openSetup() {
+  await loadSuProviders();
   const settings = await window.api.getSettings();
   su.langs = { source: settings.sourceLang || 'English', target: settings.targetLang || 'Arabic' };
   su.thinking = !!settings.thinking;
@@ -99,21 +100,17 @@ function suAiConfig() {
   }
   if (su.mode === 'local') {
     const srv = (su.servers || []).find((s) => s.id === su.local.server);
-    return { provider: 'local', apiUrl: srv ? srv.url : '', model: su.local.model || '', thinking: su.thinking };
+    return { provider: srv ? srv.id : 'lmstudio', model: su.local.model || '', thinking: su.thinking };
   }
   return { provider: su.online.provider, model: su.online.model.trim(), thinking: false };
 }
 
 async function suSaveSecrets() {
   if (su.mode !== 'online') return;
-  const sec = await window.api.getSecrets();
-  if (su.online.provider === 'compatible') {
-    sec.compatibleBaseUrl = su.online.baseUrl.trim();
-    sec.compatible = su.online.key.trim();
-  } else {
-    sec[su.online.provider] = su.online.key.trim();
-  }
-  await window.api.saveSecrets(sec);
+  const patch = { [su.online.provider]: su.online.key.trim() };
+  if (su.online.provider === 'compatible') patch.compatibleBaseUrl = su.online.baseUrl.trim();
+  await window.api.saveSecrets(patch); // merges with the other providers' keys
+  await loadProviders(true);
 }
 
 async function suRunTest() {

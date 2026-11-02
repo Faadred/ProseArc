@@ -283,9 +283,15 @@ async function loadProject(id) {
   $('#ws-context').value = project.contextWindow;
   $('#ws-thinking').checked = !!project.thinking;
   $('#ws-style').value = project.styleBrief || '';
-  $('#ws-provider').value = project.provider || 'local';
-  applyProviderVisibility(project.provider || 'local', '#ws-url-field', '#ws-provider-note');
-  if (project.provider === 'builtin') fillModelSelect('#ws-bmodel', project.model, '#ws-bmodel-note');
+  migrateLocalProvider(project);
+  await fillProviderSelect('#ws-provider', project.provider || 'builtin');
+  applyProviderVisibility(project.provider || 'builtin', '#ws-url-field', '#ws-provider-note');
+  if (project.provider === 'builtin') {
+    fillModelSelect('#ws-bmodel', project.model, '#ws-bmodel-note').then((chosen) => {
+      if (!project.model && chosen && currentProject === project) saveSettings();
+    });
+  }
+  else suggestModels('#ws-model-list', project.provider);
 
   renderProgress(countStatuses(project.segments));
   clearError();
@@ -477,10 +483,66 @@ function applyProviderVisibility(provider, urlFieldSel, noteSel) {
   const builtinP = provider === 'builtin';
   const urlEl = $(urlFieldSel);
   if (urlEl) urlEl.style.display = local ? '' : 'none';
-  if (noteSel) { const n = $(noteSel); if (n) n.style.display = (local || builtinP) ? 'none' : ''; }
+  if (noteSel) {
+    const n = $(noteSel);
+    if (n) {
+      const pv = providerInfo(provider);
+      const needsSetup = pv && (pv.kind === 'cloud' || pv.kind === 'custom') && !(providersCache && providersCache.configured[provider]);
+      n.style.display = needsSetup ? '' : 'none';
+      n.dataset.provider = provider;
+    }
+  }
   const pre = urlFieldSel.startsWith('#ws') ? 'ws' : 'set';
   $(`#${pre}-bmodel-field`).hidden = !builtinP;
   $(`#${pre}-model-field`).hidden = builtinP;
+}
+
+// ---- Providers: list, selects, model suggestions -----------------------------
+let providersCache = null; // { providers, configured, encrypted }
+async function loadProviders(refresh = false) {
+  if (!providersCache || refresh) providersCache = await window.api.listProviders();
+  return providersCache;
+}
+function providerInfo(id) {
+  return providersCache ? providersCache.providers.find((p) => p.id === id) : null;
+}
+function providerName(p) {
+  if (!p) return '';
+  if (p.id === 'builtin') return t('prov.builtin');
+  if (p.id === 'compatible') return t('prov.compatible');
+  return p.name;
+}
+// Fill a provider <select>. 'local' (a URL from older versions) appears only when in use.
+async function fillProviderSelect(sel, value) {
+  const { providers } = await loadProviders();
+  const opts = providers.map((p) => `<option value="${p.id}">${escapeHtml(providerName(p))}</option>`);
+  if (value === 'local') opts.push(`<option value="local">${escapeHtml(t('prov.localLegacy'))}</option>`);
+  $(sel).innerHTML = opts.join('');
+  $(sel).value = value;
+}
+// Books from before the Providers page used 'local' + a full URL.
+function migrateLocalProvider(project) {
+  if (project.provider && project.provider !== 'local') return;
+  const u = project.apiUrl || '';
+  let next = null;
+  if (/:11434\b/.test(u)) next = 'ollama';
+  else if (!u || /(localhost|127\.0\.0\.1):1234\b/.test(u)) next = 'lmstudio';
+  if (next) { project.provider = next; window.api.saveProject({ ...project }); }
+}
+// Model-name suggestions from the provider's own list (quietly skipped when not set up).
+const modelListCache = {};
+async function suggestModels(datalistSel, provider) {
+  const dl = $(datalistSel);
+  if (!dl) return;
+  dl.innerHTML = '';
+  const pv = providerInfo(provider) || (await loadProviders(), providerInfo(provider));
+  if (!pv || pv.kind === 'builtin' || !(providersCache.configured[provider])) return;
+  if (!modelListCache[provider]) {
+    const r = await window.api.listModels({ provider });
+    if (!r.ok) return;
+    modelListCache[provider] = r.models;
+  }
+  dl.innerHTML = modelListCache[provider].slice(0, 300).map((m) => `<option value="${escapeHtml(m)}"></option>`).join('');
 }
 
 // ---- Built-in translator: models ------------------------------------------
@@ -503,7 +565,9 @@ async function fillModelSelect(sel, value, noteSel) {
   }
   if (!models.length && !value) opts.unshift(`<option value="">${escapeHtml(t('mdl.none'))}</option>`);
   el.innerHTML = opts.join('');
-  el.value = value || (models.find((m) => m.fit === 'fits') || models[0] || {}).path || '';
+  // No choice yet: the largest model that fits the graphics card, else the smallest.
+  const fits = models.filter((m) => m.fit === 'fits').sort((a, b) => b.sizeGB - a.sizeGB);
+  el.value = value || (fits[0] || models.slice().sort((a, b) => a.sizeGB - b.sizeGB)[0] || {}).path || '';
   if (noteSel) {
     const m = models.find((x) => x.path === el.value);
     $(noteSel).innerHTML = !models.length
@@ -520,6 +584,7 @@ $('#ws-bmodel').addEventListener('change', () => fillModelSelect('#ws-bmodel', $
 $('#ws-provider').addEventListener('change', async (e) => {
   applyProviderVisibility(e.target.value, '#ws-url-field', '#ws-provider-note');
   if (e.target.value === 'builtin') { await fillModelSelect('#ws-bmodel', '', '#ws-bmodel-note'); saveSettings(); }
+  else suggestModels('#ws-model-list', e.target.value);
 });
 
 // ---- Activity log -----------------------------------------------------------
@@ -1565,7 +1630,7 @@ window.addEventListener('langchange', () => {
 // ============================================================================
 async function renderSettings() {
   const s = await window.api.getSettings();
-  $('#set-provider').value = s.provider || 'local';
+  await fillProviderSelect('#set-provider', s.provider || 'builtin');
   $('#set-source').value = s.sourceLang || 'English';
   $('#set-target').value = s.targetLang || 'Arabic';
   $('#set-url').value = s.apiUrl || 'http://localhost:1234/v1/chat/completions';
@@ -1575,19 +1640,18 @@ async function renderSettings() {
   $('#set-target').dir = isRtlLang($('#set-target').value) ? 'rtl' : 'auto';
   $('#set-test-result').textContent = '';
   $('#set-test-result').className = 'test-result';
-  applyProviderVisibility(s.provider || 'local', '#set-url-field', null);
-  if (s.provider === 'builtin') fillModelSelect('#set-bmodel', s.model, '#set-bmodel-note');
+  const prov = s.provider || 'builtin';
+  applyProviderVisibility(prov, '#set-url-field', null);
+  if (prov === 'builtin') {
+    const chosen = await fillModelSelect('#set-bmodel', s.model, '#set-bmodel-note');
+    if (!s.model && chosen) saveSettingsForm(); // keep the shown choice, so new books get a model
+  }
+  else suggestModels('#set-model-list', prov);
   renderModelsPanel();
   // Appearance reflects the current device state.
   syncSegmented();
-  // API keys.
-  const sec = await window.api.getSecrets();
-  $('#key-openai').value = sec.openai || '';
-  $('#key-openrouter').value = sec.openrouter || '';
-  $('#key-gemini').value = sec.gemini || '';
-  $('#key-anthropic').value = sec.anthropic || '';
-  $('#key-compatible').value = sec.compatible || '';
-  $('#key-compatible-base').value = sec.compatibleBaseUrl || '';
+  // The open tab's own content (providers grid / built-in panel).
+  renderSettingsTab();
 }
 
 async function saveSettingsForm() {
@@ -1601,26 +1665,15 @@ async function saveSettingsForm() {
     thinking: $('#set-thinking').checked,
   });
 }
-async function saveSecretsForm() {
-  await window.api.saveSecrets({
-    openai: $('#key-openai').value.trim(),
-    openrouter: $('#key-openrouter').value.trim(),
-    gemini: $('#key-gemini').value.trim(),
-    anthropic: $('#key-anthropic').value.trim(),
-    compatible: $('#key-compatible').value.trim(),
-    compatibleBaseUrl: $('#key-compatible-base').value.trim(),
-  });
-}
 
 ['#set-source', '#set-target', '#set-url', '#set-model', '#set-context', '#set-provider', '#set-thinking']
   .forEach((sel) => $(sel).addEventListener('change', saveSettingsForm));
 $('#set-provider').addEventListener('change', async (e) => {
   applyProviderVisibility(e.target.value, '#set-url-field', null);
   if (e.target.value === 'builtin') { await fillModelSelect('#set-bmodel', '', '#set-bmodel-note'); saveSettingsForm(); }
+  else suggestModels('#set-model-list', e.target.value);
 });
 $('#set-bmodel').addEventListener('change', () => { fillModelSelect('#set-bmodel', $('#set-bmodel').value, '#set-bmodel-note'); saveSettingsForm(); });
-['#key-openai', '#key-openrouter', '#key-gemini', '#key-anthropic', '#key-compatible', '#key-compatible-base']
-  .forEach((sel) => $(sel).addEventListener('change', saveSecretsForm));
 $('#set-test').addEventListener('click', () => runConnectionTest($('#set-url').value, $('#set-test-result')));
 // Two-option toggles for theme and language.
 function syncSegmented() {

@@ -166,15 +166,7 @@
               <h3 class="panel-title"><i data-icon="sparkles"></i><span data-i18n="ws.modelPanel">AI model</span></h3>
               <div class="field">
                 <label for="ws-provider" data-i18n="f.provider">Provider</label>
-                <select id="ws-provider">
-                  <option value="builtin" data-i18n="prov.builtin">Built-in (this PC)</option>
-                  <option value="local" data-i18n="prov.local">Local (LM Studio)</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="openrouter">OpenRouter</option>
-                  <option value="gemini">Gemini</option>
-                  <option value="anthropic" data-i18n="prov.anthropic">Claude (Anthropic)</option>
-                  <option value="compatible" data-i18n="prov.compatible">OpenAI‑compatible</option>
-                </select>
+                <select id="ws-provider"></select>
                 <p class="settings-note" id="ws-provider-note" data-i18n="f.providerKeyNote">Set this provider's API key in Settings → API keys.</p>
               </div>
               <div class="field" id="ws-bmodel-field" hidden>
@@ -185,7 +177,8 @@
                 <div class="field" id="ws-model-field">
                 <label for="ws-model"><span data-i18n="f.model">Model name</span>
                   <span class="hint" data-i18n="f.modelOpt">(optional)</span></label>
-                <input id="ws-model" type="text" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
+                <input id="ws-model" type="text" list="ws-model-list" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
+                  <datalist id="ws-model-list"></datalist>
               </div>
               <details class="fold">
                 <summary data-i18n="adv.title">Advanced</summary>
@@ -403,7 +396,14 @@
         </div>
       </div>
 
-      <div class="settings-grid">
+      <div class="tabs" id="set-tabs" role="tablist">
+        <button role="tab" data-tab="general" class="active"><i data-icon="sliders-horizontal"></i><span data-i18n="tab.general">General</span></button>
+        <button role="tab" data-tab="providers"><i data-icon="globe"></i><span data-i18n="tab.providers">Providers</span></button>
+        <button role="tab" data-tab="builtin"><i data-icon="cpu"></i><span data-i18n="mdl.title">Built-in translator</span></button>
+      </div>
+
+      <!-- General: defaults for new books, appearance -->
+      <div class="tab-page settings-grid" data-page="general">
         <!-- Defaults for new projects -->
         <div class="panel">
           <h3 class="panel-title"><i data-icon="sliders-horizontal"></i><span data-i18n="set.defaults">Defaults for new projects</span></h3>
@@ -419,15 +419,7 @@
           </div>
           <div class="field">
             <label for="set-provider" data-i18n="f.provider">Provider</label>
-            <select id="set-provider">
-              <option value="builtin" data-i18n="prov.builtin">Built-in (this PC)</option>
-              <option value="local" data-i18n="prov.local">Local (LM Studio)</option>
-              <option value="openai">OpenAI</option>
-              <option value="openrouter">OpenRouter</option>
-              <option value="gemini">Gemini</option>
-              <option value="anthropic" data-i18n="prov.anthropic">Claude (Anthropic)</option>
-              <option value="compatible" data-i18n="prov.compatible">OpenAI‑compatible</option>
-            </select>
+            <select id="set-provider"></select>
           </div>
           <div class="field" id="set-bmodel-field" hidden>
               <label for="set-bmodel" data-i18n="f.bmodel">Model</label>
@@ -437,7 +429,8 @@
             <div class="field" id="set-model-field">
             <label for="set-model"><span data-i18n="f.model">Model name</span>
               <span class="hint" data-i18n="f.modelOpt">(optional)</span></label>
-            <input id="set-model" type="text" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
+            <input id="set-model" type="text" list="set-model-list" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
+            <datalist id="set-model-list"></datalist>
           </div>
           <details class="fold">
             <summary data-i18n="adv.title">Advanced</summary>
@@ -459,6 +452,7 @@
           <p class="settings-note" data-i18n="set.note">These apply to new projects only. Each project keeps its own settings, editable in its Workspace.</p>
         </div>
 
+
         <!-- Appearance -->
         <div class="panel">
           <h3 class="panel-title"><i data-icon="palette"></i><span data-i18n="set.appearance">Appearance</span></h3>
@@ -479,6 +473,24 @@
           <p class="settings-note" data-i18n="set.appearanceNote">Appearance is saved on this device.</p>
         </div>
 
+      </div>
+
+      <!-- Providers: a card per AI provider -->
+      <div class="tab-page" data-page="providers" hidden>
+        <div class="pv-toolbar">
+          <input id="pv-search" type="search" autocomplete="off" data-i18n-ph="pv.searchPh" placeholder="Search providers…" />
+          <div class="segmented" id="pv-filter">
+            <button data-value="all" class="active" data-i18n="pv.all">All</button>
+            <button data-value="local" data-i18n="pv.thisPc">On this PC</button>
+            <button data-value="cloud" data-i18n="pv.online">Online</button>
+          </div>
+        </div>
+        <div class="pv-grid" id="pv-grid"></div>
+        <p class="settings-note pv-safe" id="pv-safe"></p>
+      </div>
+
+      <!-- Built-in translator -->
+      <div class="tab-page" data-page="builtin" hidden>
         <!-- Built-in translator: engine, model folders, models found -->
         <div class="panel models-panel" id="models-panel">
           <h3 class="panel-title"><i data-icon="cpu"></i><span data-i18n="mdl.title">Built-in translator</span></h3>
@@ -505,38 +517,6 @@
           <p class="settings-note" data-i18n="mdl.untested">Models ProseArc hasn’t been tested with may translate worse, Arabic especially.</p>
         </div>
 
-        <!-- API keys (cloud providers) -->
-        <div class="panel">
-          <h3 class="panel-title"><i data-icon="key-round"></i><span data-i18n="set.keys">API keys</span></h3>
-          <p class="settings-note" data-i18n="set.keysNote">For cloud providers. Stored only on this device — never in projects or exports.</p>
-          <details class="prov">
-            <summary>OpenAI</summary>
-            <div class="field"><label for="key-openai" data-i18n="set.apiKey">API key</label>
-              <input id="key-openai" type="password" autocomplete="off" data-i18n-ph="set.keyPh" placeholder="Enter API key" /></div>
-          </details>
-          <details class="prov">
-            <summary>OpenRouter</summary>
-            <div class="field"><label for="key-openrouter" data-i18n="set.apiKey">API key</label>
-              <input id="key-openrouter" type="password" autocomplete="off" data-i18n-ph="set.keyPh" placeholder="Enter API key" /></div>
-          </details>
-          <details class="prov">
-            <summary>Gemini</summary>
-            <div class="field"><label for="key-gemini" data-i18n="set.apiKey">API key</label>
-              <input id="key-gemini" type="password" autocomplete="off" data-i18n-ph="set.keyPh" placeholder="Enter API key" /></div>
-          </details>
-          <details class="prov">
-            <summary data-i18n="prov.anthropic">Claude (Anthropic)</summary>
-            <div class="field"><label for="key-anthropic" data-i18n="set.apiKey">API key</label>
-              <input id="key-anthropic" type="password" autocomplete="off" data-i18n-ph="set.keyPh" placeholder="Enter API key" /></div>
-          </details>
-          <details class="prov">
-            <summary data-i18n="prov.compatible">OpenAI‑compatible</summary>
-            <div class="field"><label for="key-compatible-base" data-i18n="set.baseUrl">Base URL</label>
-              <input id="key-compatible-base" type="text" placeholder="https://api.example.com/v1" /></div>
-            <div class="field"><label for="key-compatible" data-i18n="set.apiKey">API key</label>
-              <input id="key-compatible" type="password" autocomplete="off" data-i18n-ph="set.keyPh" placeholder="Enter API key" /></div>
-          </details>
-        </div>
       </div>
     </section>
   </main>
@@ -721,6 +701,18 @@
     </div>
   </div>
 
+  <!-- One provider's panel (providers.js in renderer) -->
+  <div class="modal-backdrop" id="pv-modal">
+    <div class="modal pv-modal" role="dialog" aria-modal="true" aria-labelledby="pv-title">
+      <div class="pv-head">
+        <span class="pv-logo" id="pv-logo"></span>
+        <div class="pv-head-text"><h2 id="pv-title"></h2><small id="pv-kind"></small></div>
+        <button class="icon-btn" id="pv-close" data-i18n-title="common.close" title="Close"><i data-icon="x"></i></button>
+      </div>
+      <div id="pv-body"></div>
+    </div>
+  </div>
+
   <!-- Keyboard shortcuts (F1) -->
   <div class="modal-backdrop" id="kb-modal">
     <div class="modal kb-modal" role="dialog" aria-modal="true" aria-labelledby="kb-title">
@@ -769,7 +761,9 @@
 
   <script src="icons.js"></script>
   <script src="i18n.js"></script>
+  <script src="provider-logos.js"></script>
   <script src="renderer.js"></script>
+  <script src="providers-ui.js"></script>
   <script src="models-dialog.js"></script>
   <script src="setup.js"></script>
 </body>

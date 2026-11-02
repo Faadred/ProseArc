@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('api', {
   testConnection: (apiUrl) => ipcRenderer.invoke('engine:testConnection', apiUrl),
   sampleTranslate: (cfg) => ipcRenderer.invoke('engine:sample', cfg),
   listModels: (cfg) => ipcRenderer.invoke('engine:listModels', cfg),
+  listProviders: () => ipcRenderer.invoke('providers:list'),
 
   // First-run Setup
   getSystemInfo: () => ipcRenderer.invoke('system:info'),

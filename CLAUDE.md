@@ -65,9 +65,14 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
   folder first.
 - Data: `%APPDATA%\prosearc\` (`projects\`, `glossary-global.json`, settings, keys, `app-config.json` for
   model folders + engine choice, `engine\`).
-- Providers today: `builtin` (model = path to a .gguf), `local` (LM Studio / Ollama / any OpenAI-compatible URL;
-  sends `reasoning_effort: "none"` unless thinking is on), `openai`, `openrouter`, `gemini`, `anthropic`,
-  `compatible`.
+- Providers (step 5): one registry, `src/providers.js` (id, kind builtin/local/cloud/custom, base URL, key link),
+  used by the engine and the UI: `builtin`, `lmstudio`, `ollama`, `openai`, `anthropic` (native API), `gemini`,
+  `openrouter`, `groq`, `deepseek`, `huggingface` (router.huggingface.co), `compatible`. `local` + a full `apiUrl`
+  is the pre-step-5 setting: still honoured by the engine; books on it switch to lmstudio/ollama when opened.
+  Local apps get `reasoning_effort: "none"` unless thinking is on. Secrets file (`<id>` = key, `<id>BaseUrl` =
+  address) is encrypted with Electron `safeStorage` (`{v:2, enc}`); old plain files are upgraded on first read.
+  UI: Settings tabs General / Providers / Built-in translator (`providers-ui.js`), logos in `provider-logos.js`
+  (simple-icons, CC0; OpenAI and Groq have lettermarks — no logo in simple-icons).
 - The user's models for testing: `E:\Ai\lm-studio\models` (LM Studio layout, publisher/model/file.gguf). Use
   them in place; never copy or download multi-GB models for tests. No Ollama on this PC.
 
