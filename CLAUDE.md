@@ -85,7 +85,8 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
 - Step 6 so far (2026-11-02): version 1.4.0, `build.publish.owner` → `Faadred`, README intro + new screenshots
   (public-domain books on a demo profile), app updates in Settings → General → Updates (`app:*` IPC; portable/dev
   get a link to the releases page), installer built (`dist/ProseArc-Setup-1.4.0.exe`), release notes in
-  `RELEASE_NOTES_v1.4.0.md` (untracked). Branch pushed with a PR to `main`. Left: merge, then `gh release`.
+  `RELEASE_NOTES_v1.4.0.md` (untracked). **v1.4.0 released 2026-11-02** (PR Faadred/ProseArc#15 merged). README and
+  release notes put Arabic first, then English.
 - Not tested yet: a full translation with a real cloud key (no keys used; LM Studio, Groq 401 and the Hugging
   Face router were checked live); engine Undo (needs a newer llama.cpp stable); a multi-GB Hugging Face download
   (only a 100 MB model was downloaded).

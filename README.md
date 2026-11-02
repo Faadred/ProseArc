@@ -2,100 +2,8 @@
   <img src="assets/logo.png" alt="ProseArc" width="420" />
 </p>
 
-<p align="center"><a href="#arabic">العربية ↓</a></p>
 
-A **human‑in‑the‑loop workspace for translating novels** with a **local or cloud** AI model. Import a manuscript, let the model produce a first‑pass translation, then review it side‑by‑side, read it as a book, and polish it — keeping full control over quality, consistency, and tone.
-
-> **On your PC or online — your choice.** With the built‑in translator (or LM Studio / Ollama), every AI call stays on your machine. If you connect an online provider, the text you translate is sent to that provider.
-
-Built with Electron + plain HTML/CSS/JS — no UI framework.
-
-## Screenshots
-
-|  |  |
-| --- | --- |
-| ![Library — your books](assets/screenshots/library_EN.png) | ![Review — original vs. translation](assets/screenshots/review_EN.png) |
-| ![Reader — read it as a book](assets/screenshots/reader_EN.png) | ![Glossary — terms & auto‑suggested names](assets/screenshots/glossary_EN.png) |
-
----
-
-## Features
-
-- **Project library & per‑book hub** — each book is one project; open it to a page with **Read / Translate / Review / Export** and progress at a glance.
-- **Structure‑aware import** — import **TXT, Markdown, EPUB, Word (.docx), or PDF**. Headings, paragraphs, block quotes, lists, scene breaks, and *italic* / **bold** emphasis are preserved through translation and back out to every export — not flattened into a wall of text. PDF structure is reconstructed heuristically (headings, paragraphs, emphasis; running headers and page numbers are stripped); scanned/image‑only PDFs are not supported.
-- **Built‑in translator** — runs GGUF models with **llama.cpp** inside ProseArc: no other app needed, fully on your PC. Point it at your model folders (LM Studio's folder works as is), or **find and download models from Hugging Face** in the app — each file rated for your PC and checked after download. An optional **NVIDIA (CUDA)** engine download makes it several times faster on NVIDIA cards.
-- **Any AI provider** — or translate with **LM Studio, Ollama, OpenAI, Claude, Gemini, OpenRouter, Groq, DeepSeek, Hugging Face**, or any OpenAI‑compatible server; choose per book. API keys are **encrypted** on your PC and never go into books or exports.
-- **First‑run setup** — checks your PC (graphics card, memory), helps you pick *on this PC* or *online*, and runs a quick test translation.
-- **Translation engine** — streams progress and a live activity log; per‑request timeout + auto‑retry; resumable runs.
-- **Per‑book translation style** — an optional brief (tone, formality, audience) sent with every segment.
-- **Split‑screen review editor** — original vs. editable translation, **RTL‑aware** (e.g. Arabic), a virtualized navigator for tens of thousands of segments, **filter by status**, search with live match **highlighting**, **find & replace** across all translations, and one‑click *retranslate* / *mark all reviewed*.
-- **Reader** — read the finished translation as a book: chapter **contents**, adjustable **font / size / width / theme** (dark · sepia · light), **resume position**, per‑paragraph **bookmarks & notes**, and **bilingual** tap‑to‑reveal of the original.
-- **Glossary** — a shared dictionary plus per‑project terms (project overrides shared), injected only into segments where a term appears, to stop name‑drift — plus **auto‑suggested names** detected from the book.
-- **Export** — TXT, Markdown, PDF, and EPUB (RTL‑aware), with a warning if any segment is still untranslated.
-- **Settings** — defaults for new books, a **Providers** page (one card per provider, with a test and its model list), the built‑in translator (engine, model folders, updates with Undo), and appearance.
-- **Polish** — a clean look that uses the whole window, bundled fonts (Spectral / Amiri / Inter), dark + light themes, book covers (generated when a book has none), keyboard shortcuts (F1), and a full **English / Arabic** interface with RTL.
-- **Updates itself** — the installed app checks GitHub for a new version on start, or any time from **Settings → Updates**.
-
-## Coming next
-
-- Code signing, so Windows stops warning on first run.
-
----
-
-## Download & run
-
-For most people — no Node, no setup:
-
-**[⬇ Download the latest release](https://github.com/Faadred/ProseArc/releases/latest)** (Windows)
-
-- **Installer** (`ProseArc‑Setup‑*.exe`) — adds a Start Menu shortcut + uninstaller, or
-- **Portable** (`ProseArc‑*‑portable.exe`) — a single file, just double‑click.
-
-> Because the app isn't code‑signed, Windows SmartScreen may say *“Windows protected your PC.”* Click **More info → Run anyway**.
-
-## You'll also need: a model
-
-On first run, ProseArc's **Setup** checks your PC and walks you through one of these. You can change it any time in **Settings → Providers**, or per book.
-
-**On this PC — private, free, offline.**
-- **Built‑in translator:** add a folder with `.gguf` models (for example LM Studio's models folder), or use **Find models online** to download one from Hugging Face. ProseArc runs it with its own copy of llama.cpp.
-- **LM Studio or Ollama:** if you already use one, load a model there and pick it in ProseArc.
-
-**Online — works on any PC, the provider charges per use, your book's text is sent to them.**
-1. Get an API key from the provider (each provider card has a link).
-2. In **Settings → Providers**, open the provider, paste the key, and press **Save and test**.
-3. Pick a model from its list with **Use for new books**, or choose one per book.
-
-> Models ProseArc hasn't been tested with may translate worse, Arabic especially.
-
-## Using ProseArc
-
-**Import a book** (`.txt`, `.md`, `.epub`, `.docx`, or `.pdf`) and set its languages. On the book's page, press **Start** to translate, polish it in **Review**, **Read** it as a book, and **Export** to TXT / Markdown / PDF / EPUB. Press **F1** for keyboard shortcuts.
-
----
-
-## Build from source
-
-Only needed if you want to run or build it yourself. Requires **[Node.js](https://nodejs.org/) 18+** (developed on 26).
-
-```bash
-npm install
-npm start             # run in dev (or double-click start.bat)
-npm run fetch-engine  # download the llama.cpp engine the app bundles (checked)
-npm run dist          # fetch the engine, then build a portable .exe + installer into dist/
-```
-
-## Where data lives
-
-Each project is a single JSON file under your OS per‑app data folder — `%APPDATA%\prosearc\projects\` on Windows (i.e. `C:\Users\<you>\AppData\Roaming\prosearc\projects\`). Saves are atomic (written to a temp file, then renamed into place), so an interrupted save never leaves a half‑written, corrupt project. The shared glossary sits alongside that folder at `%APPDATA%\prosearc\glossary-global.json`, with settings, the encrypted API keys, and downloaded engine builds (`engine\`). Models stay in your own model folders.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
----
-
-<a id="arabic"></a>
+<p align="center"><a href="#english">English ↓</a></p>
 
 <div dir="rtl">
 
@@ -185,3 +93,98 @@ npm run dist          # تنزيل المحرّك ثم بناء نسخة محم�
 MIT — انظر [LICENSE](LICENSE).
 
 </div>
+
+---
+
+<a id="english"></a>
+
+# ProseArc — in English
+
+A **human‑in‑the‑loop workspace for translating novels** with a **local or cloud** AI model. Import a manuscript, let the model produce a first‑pass translation, then review it side‑by‑side, read it as a book, and polish it — keeping full control over quality, consistency, and tone.
+
+> **On your PC or online — your choice.** With the built‑in translator (or LM Studio / Ollama), every AI call stays on your machine. If you connect an online provider, the text you translate is sent to that provider.
+
+Built with Electron + plain HTML/CSS/JS — no UI framework.
+
+## Screenshots
+
+|  |  |
+| --- | --- |
+| ![Library — your books](assets/screenshots/library_EN.png) | ![Review — original vs. translation](assets/screenshots/review_EN.png) |
+| ![Reader — read it as a book](assets/screenshots/reader_EN.png) | ![Glossary — terms & auto‑suggested names](assets/screenshots/glossary_EN.png) |
+
+---
+
+## Features
+
+- **Project library & per‑book hub** — each book is one project; open it to a page with **Read / Translate / Review / Export** and progress at a glance.
+- **Structure‑aware import** — import **TXT, Markdown, EPUB, Word (.docx), or PDF**. Headings, paragraphs, block quotes, lists, scene breaks, and *italic* / **bold** emphasis are preserved through translation and back out to every export — not flattened into a wall of text. PDF structure is reconstructed heuristically (headings, paragraphs, emphasis; running headers and page numbers are stripped); scanned/image‑only PDFs are not supported.
+- **Built‑in translator** — runs GGUF models with **llama.cpp** inside ProseArc: no other app needed, fully on your PC. Point it at your model folders (LM Studio's folder works as is), or **find and download models from Hugging Face** in the app — each file rated for your PC and checked after download. An optional **NVIDIA (CUDA)** engine download makes it several times faster on NVIDIA cards.
+- **Any AI provider** — or translate with **LM Studio, Ollama, OpenAI, Claude, Gemini, OpenRouter, Groq, DeepSeek, Hugging Face**, or any OpenAI‑compatible server; choose per book. API keys are **encrypted** on your PC and never go into books or exports.
+- **First‑run setup** — checks your PC (graphics card, memory), helps you pick *on this PC* or *online*, and runs a quick test translation.
+- **Translation engine** — streams progress and a live activity log; per‑request timeout + auto‑retry; resumable runs.
+- **Per‑book translation style** — an optional brief (tone, formality, audience) sent with every segment.
+- **Split‑screen review editor** — original vs. editable translation, **RTL‑aware** (e.g. Arabic), a virtualized navigator for tens of thousands of segments, **filter by status**, search with live match **highlighting**, **find & replace** across all translations, and one‑click *retranslate* / *mark all reviewed*.
+- **Reader** — read the finished translation as a book: chapter **contents**, adjustable **font / size / width / theme** (dark · sepia · light), **resume position**, per‑paragraph **bookmarks & notes**, and **bilingual** tap‑to‑reveal of the original.
+- **Glossary** — a shared dictionary plus per‑project terms (project overrides shared), injected only into segments where a term appears, to stop name‑drift — plus **auto‑suggested names** detected from the book.
+- **Export** — TXT, Markdown, PDF, and EPUB (RTL‑aware), with a warning if any segment is still untranslated.
+- **Settings** — defaults for new books, a **Providers** page (one card per provider, with a test and its model list), the built‑in translator (engine, model folders, updates with Undo), and appearance.
+- **Polish** — a clean look that uses the whole window, bundled fonts (Spectral / Amiri / Inter), dark + light themes, book covers (generated when a book has none), keyboard shortcuts (F1), and a full **English / Arabic** interface with RTL.
+- **Updates itself** — the installed app checks GitHub for a new version on start, or any time from **Settings → Updates**.
+
+## Coming next
+
+- Code signing, so Windows stops warning on first run.
+
+---
+
+## Download & run
+
+For most people — no Node, no setup:
+
+**[⬇ Download the latest release](https://github.com/Faadred/ProseArc/releases/latest)** (Windows)
+
+- **Installer** (`ProseArc‑Setup‑*.exe`) — adds a Start Menu shortcut + uninstaller, or
+- **Portable** (`ProseArc‑*‑portable.exe`) — a single file, just double‑click.
+
+> Because the app isn't code‑signed, Windows SmartScreen may say *“Windows protected your PC.”* Click **More info → Run anyway**.
+
+## You'll also need: a model
+
+On first run, ProseArc's **Setup** checks your PC and walks you through one of these. You can change it any time in **Settings → Providers**, or per book.
+
+**On this PC — private, free, offline.**
+- **Built‑in translator:** add a folder with `.gguf` models (for example LM Studio's models folder), or use **Find models online** to download one from Hugging Face. ProseArc runs it with its own copy of llama.cpp.
+- **LM Studio or Ollama:** if you already use one, load a model there and pick it in ProseArc.
+
+**Online — works on any PC, the provider charges per use, your book's text is sent to them.**
+1. Get an API key from the provider (each provider card has a link).
+2. In **Settings → Providers**, open the provider, paste the key, and press **Save and test**.
+3. Pick a model from its list with **Use for new books**, or choose one per book.
+
+> Models ProseArc hasn't been tested with may translate worse, Arabic especially.
+
+## Using ProseArc
+
+**Import a book** (`.txt`, `.md`, `.epub`, `.docx`, or `.pdf`) and set its languages. On the book's page, press **Start** to translate, polish it in **Review**, **Read** it as a book, and **Export** to TXT / Markdown / PDF / EPUB. Press **F1** for keyboard shortcuts.
+
+---
+
+## Build from source
+
+Only needed if you want to run or build it yourself. Requires **[Node.js](https://nodejs.org/) 18+** (developed on 26).
+
+```bash
+npm install
+npm start             # run in dev (or double-click start.bat)
+npm run fetch-engine  # download the llama.cpp engine the app bundles (checked)
+npm run dist          # fetch the engine, then build a portable .exe + installer into dist/
+```
+
+## Where data lives
+
+Each project is a single JSON file under your OS per‑app data folder — `%APPDATA%\prosearc\projects\` on Windows (i.e. `C:\Users\<you>\AppData\Roaming\prosearc\projects\`). Saves are atomic (written to a temp file, then renamed into place), so an interrupted save never leaves a half‑written, corrupt project. The shared glossary sits alongside that folder at `%APPDATA%\prosearc\glossary-global.json`, with settings, the encrypted API keys, and downloaded engine builds (`engine\`). Models stay in your own model folders.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
