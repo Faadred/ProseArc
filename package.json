@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/FEzio78/ProseArc.git"
+    "url": "https://github.com/Faadred/ProseArc.git"
   },
   "keywords": [
     "translation",
@@ -24,7 +24,9 @@
   "scripts": {
     "start": "electron .",
     "dist": "node scripts/fetch-llama.js && electron-builder",
-    "fetch-engine": "node scripts/fetch-llama.js"
+    "fetch-engine": "node scripts/fetch-llama.js",
+    "test": "node --test test/*.test.js",
+    "check": "node scripts/check.js"
   },
   "build": {
     "appId": "com.prosearc.app",
@@ -37,7 +39,9 @@
       "!*.pdf",
       "!sample-manuscript.txt",
       "!BUILD_BRIEF.md",
-      "!vendor/**"
+      "!vendor/**",
+      "!test/**",
+      "!.github/**"
     ],
     "publish": {
       "provider": "github",

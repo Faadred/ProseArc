@@ -32,6 +32,18 @@ async function readText(zip, zipPath) {
   return file.async('string');
 }
 
+// XML entities in OPF text (e.g. a title "Romeo &amp; Juliet").
+const XML_ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+function decodeXml(s) {
+  return String(s).replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+    if (e[0] === '#') {
+      const n = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(n) && n <= 0x10ffff ? String.fromCodePoint(n) : m;
+    }
+    return XML_ENT[e.toLowerCase()] ?? m;
+  });
+}
+
 function attr(tag, name) {
   const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`, 'i'))
         || tag.match(new RegExp(`\\b${name}\\s*=\\s*'([^']*)'`, 'i'));
@@ -71,8 +83,8 @@ async function epubToBlocks(buffer) {
   }
 
   // Title (best-effort) for a sensible default project name.
-  const title = (opf.match(/<dc:title[^>]*>([\s\S]*?)<\/dc:title>/i)?.[1] || '')
-    .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  const title = decodeXml((opf.match(/<dc:title[^>]*>([\s\S]*?)<\/dc:title>/i)?.[1] || '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
 
   // Cover image (best-effort): EPUB 3 properties="cover-image", then the
   // EPUB 2 <meta name="cover"> pointer, then a filename that looks like one.
