@@ -17,7 +17,8 @@ npm install
 npm start          # run in dev (or double-click start.bat: installs packages + fetches the engine first)
 npm run fetch-engine   # llama.cpp Vulkan build of the current stable release → vendor/llama (git-ignored, checked)
 npm run dist       # fetch-engine, then dist/ProseArc-Setup-<v>.exe + portable exe (engine bundled as resources/llama)
-node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js   # the only checks: no tests yet
+npm run check      # syntax check of every .js file (plain `node --check a.js b.js` only checks the first)
+npm test           # node:test suites in test/ (no network: fake servers on 127.0.0.1); CI runs both on PRs
 ```
 
 ## GitHub and privacy
