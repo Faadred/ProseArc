@@ -6,7 +6,7 @@
 
 const I18N = {
   en: {
-    'brand.sub': "The translator's desk",
+    'brand.sub': 'Your translation assistant',
     'nav.library': 'Library', 'nav.workspace': 'Workspace', 'nav.review': 'Review', 'nav.reader': 'Read', 'nav.glossary': 'Glossary', 'nav.settings': 'Settings',
     'nav.translate': 'Translate', 'nav.openBook': 'Open book', 'bn.meta': '{pct}% translated',
     'theme.dark': 'Dark', 'theme.light': 'Light', 'theme.toggle': 'Switch light / dark', 'lang.toggle': 'العربية — switch language',
