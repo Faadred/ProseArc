@@ -4,7 +4,7 @@
 // small, explicit, allow-listed API as window.api. Each method just forwards to
 // an IPC handler in main.js. Nothing else from Node/Electron leaks to the page.
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   // Projects
@@ -38,6 +38,64 @@ contextBridge.exposeInMainWorld('api', {
   startTranslation: (projectId) => ipcRenderer.invoke('engine:start', projectId),
   stopTranslation: () => ipcRenderer.invoke('engine:stop'),
   testConnection: (apiUrl) => ipcRenderer.invoke('engine:testConnection', apiUrl),
+  sampleTranslate: (cfg) => ipcRenderer.invoke('engine:sample', cfg),
+  listModels: (cfg) => ipcRenderer.invoke('engine:listModels', cfg),
+  listProviders: () => ipcRenderer.invoke('providers:list'),
+
+  // First-run Setup
+  getSystemInfo: () => ipcRenderer.invoke('system:info'),
+  detectLocalServers: () => ipcRenderer.invoke('local:detect'),
+  applyAiToAllProjects: (ai) => ipcRenderer.invoke('projects:applyAi', ai),
+
+  // Built-in translator: model folders and the models found in them.
+  getModelFolders: () => ipcRenderer.invoke('models:folders'),
+  addModelFolder: (folder) => ipcRenderer.invoke('models:addFolder', folder || null),
+  removeModelFolder: (folder) => ipcRenderer.invoke('models:removeFolder', folder),
+  listModelFiles: () => ipcRenderer.invoke('models:list'),
+  builtinStatus: () => ipcRenderer.invoke('builtin:status'),
+  builtinEngines: () => ipcRenderer.invoke('builtin:engines'),
+  builtinStop: () => ipcRenderer.invoke('builtin:stop'),
+  engineInfo: () => ipcRenderer.invoke('engine:info'),
+  engineCheckUpdate: () => ipcRenderer.invoke('engine:checkUpdate'),
+  engineDownload: (flavour) => ipcRenderer.invoke('engine:download', flavour),
+  engineCancel: () => ipcRenderer.invoke('engine:cancel'),
+  engineUse: (choice) => ipcRenderer.invoke('engine:use', choice),
+
+  // Hugging Face: find and download models
+  hubSearch: (query) => ipcRenderer.invoke('hub:search', query),
+  hubFiles: (repo) => ipcRenderer.invoke('hub:files', repo),
+  hubFolder: () => ipcRenderer.invoke('hub:folder'),
+  hubChooseFolder: () => ipcRenderer.invoke('hub:chooseFolder'),
+  hubState: () => ipcRenderer.invoke('hub:state'),
+  hubDownload: (repo, file) => ipcRenderer.invoke('hub:download', { repo, file }),
+  hubCancel: () => ipcRenderer.invoke('hub:cancel'),
+  onHubProgress: (callback) => {
+    const listener = (_e, p) => callback(p);
+    ipcRenderer.on('hub:progress', listener);
+    return () => ipcRenderer.removeListener('hub:progress', listener);
+  },
+  // App updates from GitHub releases
+  appUpdateInfo: () => ipcRenderer.invoke('app:updateInfo'),
+  appCheckUpdate: () => ipcRenderer.invoke('app:checkUpdate'),
+  appInstallUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  appOpenReleases: () => ipcRenderer.invoke('app:openReleases'),
+  onAppUpdate: (callback) => {
+    const listener = (_e, s) => callback(s);
+    ipcRenderer.on('app:update', listener);
+    return () => ipcRenderer.removeListener('app:update', listener);
+  },
+  onEngineProgress: (callback) => {
+    const listener = (_e, p) => callback(p);
+    ipcRenderer.on('engine:progress', listener);
+    return () => ipcRenderer.removeListener('engine:progress', listener);
+  },
+  onBuiltinStatus: (callback) => {
+    const listener = (_e, st) => callback(st);
+    ipcRenderer.on('builtin:status', listener);
+    return () => ipcRenderer.removeListener('builtin:status', listener);
+  },
+  // Path of a dropped file/folder (File.path is gone in modern Electron).
+  pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
   retranslateSegment: (projectId, segmentId) =>
     ipcRenderer.invoke('engine:retranslateSegment', { projectId, segmentId }),
   resetForRetranslate: (projectId, includeReviewed) =>

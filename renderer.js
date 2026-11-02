@@ -5,12 +5,54 @@
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-function toast(message) {
-  const el = $('#toast');
-  el.textContent = message;
-  el.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove('show'), 2600);
+// Short messages that need no answer. kind: 'info' | 'success' | 'error'.
+// They stack in the bottom corner and fade out on their own (errors stay longer).
+const TOAST_ICON = { info: 'info', success: 'circle-check', error: 'circle-alert' };
+function toast(message, kind = 'info') {
+  const box = $('#toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  el.innerHTML = `${icon(TOAST_ICON[kind] || 'info')}<span>${escapeHtml(message)}</span>`;
+  box.appendChild(el);
+  while (box.children.length > 3) box.firstElementChild.remove();
+  requestAnimationFrame(() => el.classList.add('show'));
+  const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 220); };
+  el.addEventListener('click', close);
+  setTimeout(close, kind === 'error' ? 6000 : 3200);
+}
+
+// In-app yes/no dialog. Resolves true when confirmed. danger = red button.
+function askConfirm({ title, body = '', ok, danger = false }) {
+  return new Promise((resolve) => {
+    const modal = $('#confirm-modal');
+    $('#cf-title').textContent = title;
+    $('#cf-body').textContent = body;
+    $('#cf-body').hidden = !body;
+    $('#cf-icon').innerHTML = icon(danger ? 'trash-2' : 'circle-alert');
+    $('#cf-icon').classList.toggle('danger', danger);
+    const okBtn = $('#cf-ok');
+    okBtn.textContent = ok || t('common.ok');
+    okBtn.className = `btn ${danger ? 'btn-danger-solid' : 'btn-primary'}`;
+    const prevFocus = document.activeElement;
+    const done = (val) => {
+      modal.classList.remove('open');
+      okBtn.onclick = null; $('#cf-cancel').onclick = null; modal.onclick = null;
+      document.removeEventListener('keydown', onKey, true);
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+      resolve(val);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); done(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); }
+    };
+    okBtn.onclick = () => done(true);
+    $('#cf-cancel').onclick = () => done(false);
+    modal.onclick = (e) => { if (e.target === modal) done(false); };
+    document.addEventListener('keydown', onKey, true);
+    modal.classList.add('open');
+    (danger ? $('#cf-cancel') : okBtn).focus(); // the safe choice has focus for risky actions
+  });
 }
 
 function escapeHtml(s) {
@@ -30,75 +72,172 @@ function showView(name) {
   if (name === 'settings') renderSettings();
   if (name === 'reader') renderReader();
   if (name === 'hub') renderHub();
+  if (name === 'library') renderLibrary();
 }
 
 $$('.nav-item').forEach((btn) => {
   btn.addEventListener('click', () => showView(btn.dataset.view));
 });
 
+// ---- Pop-up menu (⋯) --------------------------------------------------------
+// openMenu(anchor, [{ icon, label, action, danger }]) shows a small menu under
+// the anchor button, aligned to its end edge. Click outside or Escape closes it.
+function openMenu(anchor, items) {
+  const menu = $('#menu');
+  menu.innerHTML = items.map((it, i) => `
+    <button class="menu-item${it.danger ? ' danger' : ''}" role="menuitem" data-i="${i}">
+      ${icon(it.icon)}<span>${escapeHtml(it.label)}</span></button>`).join('');
+  menu.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const m = menu.getBoundingClientRect();
+  const rtl = document.documentElement.dir === 'rtl';
+  let left = rtl ? r.left : r.right - m.width;
+  left = Math.max(8, Math.min(left, window.innerWidth - m.width - 8));
+  let top = r.bottom + 6;
+  if (top + m.height > window.innerHeight - 8) top = r.top - m.height - 6;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.onclick = (e) => {
+    const b = e.target.closest('.menu-item');
+    if (!b) return;
+    closeMenu();
+    items[+b.dataset.i].action();
+  };
+  menu.querySelector('.menu-item')?.focus();
+  anchor.setAttribute('aria-expanded', 'true');
+  openMenu._anchor = anchor;
+}
+function closeMenu() {
+  $('#menu').hidden = true;
+  if (openMenu._anchor) openMenu._anchor.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('mousedown', (e) => {
+  if ($('#menu').hidden || e.target.closest('#menu')) return;
+  if (openMenu._anchor && openMenu._anchor.contains(e.target)) return;
+  closeMenu();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#menu').hidden) closeMenu(); });
+window.addEventListener('resize', closeMenu);
+$('.main').addEventListener('scroll', closeMenu, { passive: true });
+
 // ---- Library ----------------------------------------------------------------
+// The next step for a book, used by the card's main button and the book page.
+function nextStep(c) {
+  if (c.translated === 0) return { view: 'workspace', label: t('card.start'), icon: 'play' };
+  if (c.translated < c.total) return { view: 'workspace', label: t('card.continue'), icon: 'languages' };
+  if (c.reviewed < c.total) return { view: 'review', label: t('card.continueReview'), icon: 'pencil-line' };
+  return { view: 'reader', label: t('card.read'), icon: 'book-open-text' };
+}
+
 async function renderLibrary() {
   const body = $('#library-body');
   const projects = await window.api.listProjects();
+  $('#new-project-btn').hidden = projects.length === 0;
+  $('#lib-lede').textContent = projects.length ? t('lib.lede') : t('lib.ledeEmpty');
 
   if (projects.length === 0) {
     body.innerHTML = `
-      <div class="empty">
-        <h2>${t('lib.emptyTitle')}</h2>
-        <p>${t('lib.emptyBody')}</p>
-        <button class="btn btn-primary" id="empty-new">${t('lib.emptyBtn')}</button>
+      <div class="first-run">
+        <button class="import-hero" id="empty-new">
+          <span class="import-hero-icon">${icon('file-up')}</span>
+          <span class="import-hero-title">${t('lib.emptyTitle')}</span>
+          <span class="import-hero-body">${t('lib.emptyBody')}</span>
+          <span class="btn btn-primary btn-lg">${icon('plus')}${t('lib.emptyBtn')}</span>
+        </button>
+        <ol class="steps">
+          ${[['file-up', 1], ['languages', 2], ['pencil-line', 3], ['book-open-text', 4]].map(([ic, n]) => `
+            <li class="step"><span class="step-icon">${icon(ic)}</span>
+              <span class="step-text"><strong>${t('lib.step' + n)}</strong><span>${t('lib.step' + n + 'd')}</span></span></li>`).join('')}
+        </ol>
       </div>`;
     $('#empty-new').addEventListener('click', openNewProjectModal);
     return;
   }
 
-  body.innerHTML = `<div class="project-grid">${projects.map(cardHtml).join('')}</div>`;
+  body.innerHTML = `<div class="book-grid">${projects.map(cardHtml).join('')}
+    <button class="book-add" id="lib-add">
+      <span class="book-add-inner"><span class="book-add-icon">${icon('plus')}</span><span>${t('lib.addTile')}</span></span>
+    </button></div>`;
+  $('#lib-add').addEventListener('click', openNewProjectModal);
 
-  // Wire each card.
-  $$('.project-card').forEach((card) => {
-    const id = card.dataset.id;
+  projects.forEach((p) => {
+    const card = body.querySelector(`.book-card[data-id="${p.id}"]`);
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.card-actions')) return; // let action buttons handle themselves
-      openBook(id);
+      if (e.target.closest('.js-menu, .js-next')) return;
+      openBook(p.id);
     });
-    // Keyboard: Enter/Space opens the focused card.
     card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBook(id); }
+      if (e.target !== card) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openBook(p.id); }
     });
-    card.querySelector('.js-open').addEventListener('click', () => openBook(id));
-    card.querySelector('.js-delete').addEventListener('click', () => deleteProject(id, card));
+    card.querySelector('.js-next').addEventListener('click', async () => {
+      await loadProject(p.id);
+      showView(nextStep(p.counts).view);
+    });
+    card.querySelector('.js-menu').addEventListener('click', (e) => {
+      openMenu(e.currentTarget, bookMenuItems(p.id));
+    });
+  });
+
+  // The list holds summaries only; fetch each book once for its cover image.
+  const full = await Promise.all(projects.map((p) => window.api.getProject(p.id).catch(() => null)));
+  full.forEach((p) => {
+    if (!p || !p.coverUrl) return;
+    const el = body.querySelector(`.book-card[data-id="${p.id}"] .book-cover`);
+    if (el) el.innerHTML = coverHtml(p);
   });
 }
 
 function cardHtml(p) {
   const { total, translated, reviewed } = p.counts;
-  const pct = total ? Math.round((translated / total) * 100) : 0;
-  const cover = p.coverUrl
-    ? `<div class="card-cover"><img src="${p.coverUrl}" alt="" /></div>`
-    : `<div class="card-cover" style="background:${coverColor(p.name)}"><span>${escapeHtml((p.name || '?').trim()[0] || '?')}</span></div>`;
+  const pctT = total ? Math.round((translated / total) * 100) : 0;
+  const pctR = total ? Math.round((reviewed / total) * 100) : 0;
+  const done = total > 0 && reviewed === total;
+  const next = nextStep(p.counts);
   return `
-    <div class="project-card" data-id="${p.id}" tabindex="0">
-      ${cover}
-      <div>
-        <h3>${escapeHtml(p.name)}</h3>
-        <div class="langs">${escapeHtml(p.sourceLang)} → ${escapeHtml(p.targetLang)}</div>
+    <article class="book-card" data-id="${p.id}" tabindex="0" aria-label="${escapeHtml(p.name)}">
+      <div class="book-cover">${coverHtml(p)}</div>
+      ${done ? `<span class="book-badge">${icon('circle-check')}${t('card.done')}</span>` : ''}
+      <button class="icon-btn book-menu js-menu" aria-haspopup="menu" aria-label="${t('card.more')}" title="${t('card.more')}">${icon('ellipsis')}</button>
+      <div class="book-info">
+        <h3 class="book-title" dir="auto">${escapeHtml(p.name)}</h3>
+        <div class="book-langs">${escapeHtml(p.sourceLang)} → ${escapeHtml(p.targetLang)}</div>
+        <div class="book-progress" title="${escapeHtml(t('stats', { t: translated, n: total, r: reviewed }))}">
+          <span class="bp-reviewed" style="width:${pctR}%"></span><span class="bp-translated" style="width:${pctT - pctR}%"></span>
+        </div>
+        <div class="book-foot">
+          <span class="book-pct">${t('card.meta', { pct: pctT, r: reviewed })}</span>
+          <button class="btn btn-ghost btn-sm js-next">${icon(next.icon)}${next.label}</button>
+        </div>
       </div>
-      <div class="progress">
-        <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div class="progress-meta">${t('stats', { t: translated, n: total, r: reviewed })}</div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-ghost btn-sm js-open">${t('card.open')}</button>
-        <button class="btn btn-danger btn-sm js-delete">${t('card.delete')}</button>
-      </div>
-    </div>`;
+    </article>`;
 }
 
-async function deleteProject(id, cardEl) {
-  const name = cardEl.querySelector('h3').textContent;
-  if (!confirm(t('confirm.delete', { name }))) return;
-  await window.api.deleteProject(id);
-  toast(t('toast.deleted'));
+// Rename / cover / delete for any book (from its card or its book page).
+function bookMenuItems(id, { withRemoveCover = false } = {}) {
+  const withBook = (fn) => async () => {
+    const p = (currentProject && currentProject.id === id) ? currentProject : await window.api.getProject(id);
+    fn(p);
+  };
+  const items = [
+    { icon: 'pencil', label: t('hub.rename'), action: withBook(openRenameModal) },
+    { icon: 'image', label: t('hub.cover'), action: withBook(changeCover) },
+  ];
+  if (withRemoveCover) items.push({ icon: 'x', label: t('hub.coverRemove'), action: withBook(removeCover) });
+  items.push({ icon: 'trash-2', label: t('card.delete'), danger: true, action: withBook(deleteBook) });
+  return items;
+}
+
+async function deleteBook(p) {
+  if (!await askConfirm({ title: t('confirm.deleteTitle', { name: p.name }), body: t('confirm.deleteBody'), ok: t('card.delete'), danger: true })) return;
+  await window.api.deleteProject(p.id);
+  if (currentProject && currentProject.id === p.id) {
+    currentProject = null;
+    currentProjectId = null;
+    renderBookNav();
+    showView('library');
+  }
+  toast(t('toast.deleted'), 'success');
   renderLibrary();
 }
 
@@ -121,6 +260,7 @@ function countStatuses(segments) {
 function renderProgress(counts) {
   const pct = counts.total ? Math.round((counts.translated / counts.total) * 100) : 0;
   $('#ws-bar').style.width = `${pct}%`;
+  if (currentProject && $('#bn-meta')) $('#bn-meta').textContent = t('bn.meta', { pct });
   $('#ws-counter').textContent =
     t('stats', { t: counts.translated, n: counts.total, r: counts.reviewed });
 }
@@ -141,9 +281,17 @@ async function loadProject(id) {
   $('#ws-url').value = project.apiUrl;
   $('#ws-model').value = project.model || '';
   $('#ws-context').value = project.contextWindow;
+  $('#ws-thinking').checked = !!project.thinking;
   $('#ws-style').value = project.styleBrief || '';
-  $('#ws-provider').value = project.provider || 'local';
-  applyProviderVisibility(project.provider || 'local', '#ws-url-field', '#ws-provider-note');
+  migrateLocalProvider(project);
+  await fillProviderSelect('#ws-provider', project.provider || 'builtin');
+  applyProviderVisibility(project.provider || 'builtin', '#ws-url-field', '#ws-provider-note');
+  if (project.provider === 'builtin') {
+    fillModelSelect('#ws-bmodel', project.model, '#ws-bmodel-note').then((chosen) => {
+      if (!project.model && chosen && currentProject === project) saveSettings();
+    });
+  }
+  else suggestModels('#ws-model-list', project.provider);
 
   renderProgress(countStatuses(project.segments));
   clearError();
@@ -151,6 +299,7 @@ async function loadProject(id) {
 
   $('#workspace-empty').hidden = true;
   $('#workspace-panel').hidden = false;
+  renderBookNav();
 }
 
 // Clicking a book in the Library lands on its hub page.
@@ -165,8 +314,48 @@ async function openProject(id) {
   showView('workspace');
 }
 
+// ---- Covers -----------------------------------------------------------------
+// A book's cover: the real image when there is one, otherwise a generated
+// cover (its title set on a tinted background). `mini` = just the initial.
+function coverHtml(p, { mini = false } = {}) {
+  if (p.coverUrl) return `<img src="${p.coverUrl}" alt="" draggable="false" />`;
+  const name = (p.name || '?').trim();
+  const bg = coverColor(name);
+  if (mini) {
+    return `<span class="gen-cover mini" style="--cover:${bg}"><span>${escapeHtml(name[0] || '?')}</span></span>`;
+  }
+  return `<span class="gen-cover" style="--cover:${bg}">
+      <span class="gen-title" dir="auto">${escapeHtml(name)}</span>
+      <span class="gen-rule"></span>
+      <span class="gen-langs" dir="auto">${escapeHtml(p.sourceLang || '')} → ${escapeHtml(p.targetLang || '')}</span>
+    </span>`;
+}
+
+// Tooltips for sidebar items: in a narrow window the sidebar shows icons only.
+function syncNavTitles() {
+  $$('.sidebar .nav-item').forEach((b) => {
+    const label = b.querySelector('[data-i18n]') || b.querySelector('.book-chip-title');
+    b.title = label ? label.textContent.trim() : '';
+  });
+}
+
+// ---- Open book in the sidebar ----------------------------------------------
+function renderBookNav() {
+  const nav = $('#book-nav');
+  if (!currentProject) { nav.hidden = true; return; }
+  const p = currentProject;
+  const c = countStatuses(p.segments);
+  const pct = c.total ? Math.round((c.translated / c.total) * 100) : 0;
+  $('#bn-cover').innerHTML = coverHtml(p, { mini: true });
+  $('#bn-title').textContent = p.name;
+  $('#bn-meta').textContent = t('bn.meta', { pct });
+  nav.hidden = false;
+  syncNavTitles();
+}
+
 // ---- Book hub ---------------------------------------------------------------
-const HUB_COLORS = ['#3a5750', '#5a4040', '#3f4a5e', '#574a63', '#5e5333', '#42565e'];
+// Cloth colours for generated covers (deep enough for white text in both themes).
+const HUB_COLORS = ['#2F5D5A', '#6B3236', '#2E4366', '#4E3A5F', '#5B5428', '#35533A', '#6A4A2C', '#3C5866'];
 function coverColor(name) {
   let h = 0;
   const s = String(name || '');
@@ -177,77 +366,86 @@ function renderHub() {
   if (!currentProject) return;
   const p = currentProject;
   const c = countStatuses(p.segments);
-  const pct = c.total ? Math.round((c.translated / c.total) * 100) : 0;
+  const pctT = c.total ? Math.round((c.translated / c.total) * 100) : 0;
+  const pctR = c.total ? Math.round((c.reviewed / c.total) * 100) : 0;
   $('#hub-title').textContent = p.name;
   $('#hub-langs').textContent = `${p.sourceLang} → ${p.targetLang}`;
-  const cover = $('#hub-cover');
-  if (p.coverUrl) {
-    cover.style.background = 'none';
-    cover.innerHTML = `<img src="${p.coverUrl}" alt="" />`;
-  } else {
-    cover.style.background = coverColor(p.name);
-    cover.innerHTML = `<span id="hub-initial">${escapeHtml((p.name || '?').trim()[0] || '?')}</span>`;
-  }
-  $('#hub-cover-remove').hidden = !p.coverUrl;
-  $('#hub-bar-fill').style.width = `${pct}%`;
-  $('#hub-counts').textContent = t('stats', { t: c.translated, n: c.total, r: c.reviewed });
+  $('#hub-cover').innerHTML = coverHtml(p);
+  $('#hub-bar-reviewed').style.width = `${pctR}%`;
+  $('#hub-bar-fill').style.width = `${pctT - pctR}%`;
+  $('#hub-count-t').textContent = t('hub.countT', { t: c.translated, n: c.total });
+  $('#hub-count-r').textContent = t('hub.countR', { r: c.reviewed, n: c.total });
+  $('#hub-st-translate').textContent = c.translated >= c.total ? t('hub.stDone') : t('hub.stPct', { pct: pctT });
+  $('#hub-st-review').textContent = c.reviewed >= c.total ? t('hub.stDone') : t('hub.stPct', { pct: pctR });
+  const next = nextStep(c);
+  $('#hub-next').innerHTML = `${icon(next.icon)}<span>${escapeHtml(next.label)}</span>`;
+  $('#hub-next').dataset.go = next.view;
 }
 
 // Rename runs through an in-app modal: window.prompt() is not supported in
 // Electron renderers (it silently does nothing).
-function openRenameModal() {
-  if (!currentProject) return;
-  $('#rn-input').value = currentProject.name;
+let renameTarget = null;
+function openRenameModal(p = currentProject) {
+  if (!p) return;
+  renameTarget = p;
+  $('#rn-input').value = p.name;
   $('#rename-modal').classList.add('open');
   $('#rn-input').focus();
   $('#rn-input').select();
 }
 function closeRenameModal() { $('#rename-modal').classList.remove('open'); }
 async function saveRename() {
-  if (!currentProject) return;
+  const p = renameTarget;
+  if (!p) return;
   const clean = $('#rn-input').value.trim();
   closeRenameModal();
-  if (!clean || clean === currentProject.name) return;
-  currentProject.name = clean;
-  $('#ws-name').value = clean;
-  $('#ws-title').textContent = clean;
-  await window.api.saveProject(currentProject);
-  renderHub();
-}
-
-async function changeCover() {
-  if (!currentProject) return;
-  const res = await window.api.pickCover(currentProject.id);
-  if (!res) return; // user cancelled the picker
-  if (res.error) { toast(t('toast.coverError')); return; }
-  currentProject.coverUrl = res.coverUrl;
-  renderHub();
-}
-async function removeCover() {
-  if (!currentProject) return;
-  await window.api.removeCover(currentProject.id);
-  currentProject.coverUrl = null;
-  renderHub();
-}
-async function deleteCurrentBook() {
-  if (!currentProject) return;
-  if (!confirm(t('confirm.delete', { name: currentProject.name }))) return;
-  await window.api.deleteProject(currentProject.id);
-  currentProject = null;
-  currentProjectId = null;
-  toast(t('toast.deleted'));
-  showView('library');
+  if (!clean || clean === p.name) return;
+  p.name = clean;
+  await window.api.saveProject(p);
+  if (currentProject && currentProject.id === p.id) {
+    currentProject.name = clean;
+    $('#ws-name').value = clean;
+    $('#ws-title').textContent = clean;
+    renderHub();
+    renderBookNav();
+  }
   renderLibrary();
 }
-$('#hub-read').addEventListener('click', () => showView('reader'));
-$('#hub-translate').addEventListener('click', () => showView('workspace'));
-$('#hub-review').addEventListener('click', () => showView('review'));
-$('#hub-export').addEventListener('click', () => openExportModal());
-$('#hub-back').addEventListener('click', () => { showView('library'); renderLibrary(); });
-$('#hub-rename').addEventListener('click', openRenameModal);
-$('#hub-cover-btn').addEventListener('click', changeCover);
-$('#hub-cover-remove').addEventListener('click', removeCover);
-$('#hub-delete').addEventListener('click', deleteCurrentBook);
+
+async function changeCover(p = currentProject) {
+  if (!p) return;
+  const res = await window.api.pickCover(p.id);
+  if (!res) return; // user cancelled the picker
+  if (res.error) { toast(t('toast.coverError'), 'error'); return; }
+  p.coverUrl = res.coverUrl;
+  if (currentProject && currentProject.id === p.id) {
+    currentProject.coverUrl = res.coverUrl;
+    renderHub();
+    renderBookNav();
+  }
+  renderLibrary();
+}
+async function removeCover(p = currentProject) {
+  if (!p) return;
+  await window.api.removeCover(p.id);
+  p.coverUrl = null;
+  if (currentProject && currentProject.id === p.id) {
+    currentProject.coverUrl = null;
+    renderHub();
+    renderBookNav();
+  }
+  renderLibrary();
+}
+// Book page: the next-step button and the four step tiles.
+$('#view-hub').addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]');
+  if (!go) return;
+  if (go.dataset.go === 'export') openExportModal();
+  else showView(go.dataset.go);
+});
+$('#hub-menu').addEventListener('click', (e) => {
+  if (currentProject) openMenu(e.currentTarget, bookMenuItems(currentProject.id, { withRemoveCover: !!currentProject.coverUrl }));
+});
 $('#rn-save').addEventListener('click', saveRename);
 $('#rn-cancel').addEventListener('click', closeRenameModal);
 $('#rn-input').addEventListener('keydown', (e) => {
@@ -264,13 +462,17 @@ async function saveSettings() {
   currentProject.sourceLang = $('#ws-source').value.trim() || 'Source';
   currentProject.targetLang = $('#ws-target').value.trim() || 'Target';
   currentProject.apiUrl = $('#ws-url').value.trim();
-  currentProject.model = $('#ws-model').value.trim();
+  currentProject.model = currentProject.provider === 'builtin' || $('#ws-provider').value === 'builtin'
+    ? $('#ws-bmodel').value
+    : $('#ws-model').value.trim();
   currentProject.contextWindow = Math.max(0, parseInt($('#ws-context').value, 10) || 0);
+  currentProject.thinking = $('#ws-thinking').checked;
   currentProject.styleBrief = $('#ws-style').value.trim();
   currentProject.provider = $('#ws-provider').value;
 
   $('#ws-title').textContent = currentProject.name;
   $('#ws-langs').textContent = `${currentProject.sourceLang} → ${currentProject.targetLang}`;
+  renderBookNav();
 
   await window.api.saveProject(currentProject);
 }
@@ -278,15 +480,112 @@ async function saveSettings() {
 // Show the API-URL field only for the local provider; show a key hint for cloud.
 function applyProviderVisibility(provider, urlFieldSel, noteSel) {
   const local = provider === 'local';
+  const builtinP = provider === 'builtin';
   const urlEl = $(urlFieldSel);
   if (urlEl) urlEl.style.display = local ? '' : 'none';
-  if (noteSel) { const n = $(noteSel); if (n) n.style.display = local ? 'none' : ''; }
+  if (noteSel) {
+    const n = $(noteSel);
+    if (n) {
+      const pv = providerInfo(provider);
+      const needsSetup = pv && (pv.kind === 'cloud' || pv.kind === 'custom') && !(providersCache && providersCache.configured[provider]);
+      n.style.display = needsSetup ? '' : 'none';
+      n.dataset.provider = provider;
+    }
+  }
+  const pre = urlFieldSel.startsWith('#ws') ? 'ws' : 'set';
+  $(`#${pre}-bmodel-field`).hidden = !builtinP;
+  $(`#${pre}-model-field`).hidden = builtinP;
 }
 
-['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider']
+// ---- Providers: list, selects, model suggestions -----------------------------
+let providersCache = null; // { providers, configured, encrypted }
+async function loadProviders(refresh = false) {
+  if (!providersCache || refresh) providersCache = await window.api.listProviders();
+  return providersCache;
+}
+function providerInfo(id) {
+  return providersCache ? providersCache.providers.find((p) => p.id === id) : null;
+}
+function providerName(p) {
+  if (!p) return '';
+  if (p.id === 'builtin') return t('prov.builtin');
+  if (p.id === 'compatible') return t('prov.compatible');
+  return p.name;
+}
+// Fill a provider <select>. 'local' (a URL from older versions) appears only when in use.
+async function fillProviderSelect(sel, value) {
+  const { providers } = await loadProviders();
+  const opts = providers.map((p) => `<option value="${p.id}">${escapeHtml(providerName(p))}</option>`);
+  if (value === 'local') opts.push(`<option value="local">${escapeHtml(t('prov.localLegacy'))}</option>`);
+  $(sel).innerHTML = opts.join('');
+  $(sel).value = value;
+}
+// Books from before the Providers page used 'local' + a full URL.
+function migrateLocalProvider(project) {
+  if (project.provider && project.provider !== 'local') return;
+  const u = project.apiUrl || '';
+  let next = null;
+  if (/:11434\b/.test(u)) next = 'ollama';
+  else if (!u || /(localhost|127\.0\.0\.1):1234\b/.test(u)) next = 'lmstudio';
+  if (next) { project.provider = next; window.api.saveProject({ ...project }); }
+}
+// Model-name suggestions from the provider's own list (quietly skipped when not set up).
+const modelListCache = {};
+async function suggestModels(datalistSel, provider) {
+  const dl = $(datalistSel);
+  if (!dl) return;
+  dl.innerHTML = '';
+  const pv = providerInfo(provider) || (await loadProviders(), providerInfo(provider));
+  if (!pv || pv.kind === 'builtin' || !(providersCache.configured[provider])) return;
+  if (!modelListCache[provider]) {
+    const r = await window.api.listModels({ provider });
+    if (!r.ok) return;
+    modelListCache[provider] = r.models;
+  }
+  dl.innerHTML = modelListCache[provider].slice(0, 300).map((m) => `<option value="${escapeHtml(m)}"></option>`).join('');
+}
+
+// ---- Built-in translator: models ------------------------------------------
+let modelFilesCache = null;
+async function getModelFiles(refresh = false) {
+  if (!modelFilesCache || refresh) modelFilesCache = await window.api.listModelFiles();
+  return modelFilesCache;
+}
+const FIT_ICON = { fits: 'circle-check', partial: 'info', slow: 'info', toobig: 'circle-alert' };
+function modelLabel(m) {
+  return [m.name, [m.params, m.quant].filter(Boolean).join(' '), `${m.sizeGB} GB`].filter(Boolean).join(' · ');
+}
+// Fill a <select> with the models found; keep `value` even if it's gone.
+async function fillModelSelect(sel, value, noteSel) {
+  const el = $(sel);
+  const models = await getModelFiles();
+  const opts = models.map((m) => `<option value="${escapeHtml(m.path)}">${escapeHtml(modelLabel(m))}${m.fit === 'toobig' ? ' — ' + escapeHtml(t('fit.toobig')) : ''}</option>`);
+  if (value && !models.some((m) => m.path === value)) {
+    opts.unshift(`<option value="${escapeHtml(value)}">${escapeHtml(value.split(/[\\/]/).pop())} — ${escapeHtml(t('mdl.missing'))}</option>`);
+  }
+  if (!models.length && !value) opts.unshift(`<option value="">${escapeHtml(t('mdl.none'))}</option>`);
+  el.innerHTML = opts.join('');
+  // No choice yet: the largest model that fits the graphics card, else the smallest.
+  const fits = models.filter((m) => m.fit === 'fits').sort((a, b) => b.sizeGB - a.sizeGB);
+  el.value = value || (fits[0] || models.slice().sort((a, b) => a.sizeGB - b.sizeGB)[0] || {}).path || '';
+  if (noteSel) {
+    const m = models.find((x) => x.path === el.value);
+    $(noteSel).innerHTML = !models.length
+      ? escapeHtml(t('mdl.noneHint'))
+      : m ? `${icon(FIT_ICON[m.fit])}<span>${escapeHtml(t('fit.' + m.fit))}</span>` : '';
+    $(noteSel).className = `settings-note fit-note ${m ? 'fit-' + m.fit : ''}`;
+  }
+  return el.value;
+}
+
+['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider', '#ws-thinking', '#ws-bmodel']
   .forEach((sel) => $(sel).addEventListener('change', saveSettings));
-$('#ws-provider').addEventListener('change', (e) =>
-  applyProviderVisibility(e.target.value, '#ws-url-field', '#ws-provider-note'));
+$('#ws-bmodel').addEventListener('change', () => fillModelSelect('#ws-bmodel', $('#ws-bmodel').value, '#ws-bmodel-note'));
+$('#ws-provider').addEventListener('change', async (e) => {
+  applyProviderVisibility(e.target.value, '#ws-url-field', '#ws-provider-note');
+  if (e.target.value === 'builtin') { await fillModelSelect('#ws-bmodel', '', '#ws-bmodel-note'); saveSettings(); }
+  else suggestModels('#ws-model-list', e.target.value);
+});
 
 // ---- Activity log -----------------------------------------------------------
 function logLine(message, level = 'info') {
@@ -318,17 +617,21 @@ function clearError() {
 function setEngineRunning(on) {
   isRunning = on;
   const btn = $('#ws-run');
-  btn.textContent = on ? t('ws.stop') : t('ws.start');
+  btn.innerHTML = `${icon(on ? 'square' : 'play')}<span>${escapeHtml(t(on ? 'ws.stop' : 'ws.start'))}</span>`;
   btn.classList.toggle('btn-stop', on);
   // Lock settings while a run is in progress.
-  ['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider']
+  ['#ws-name', '#ws-source', '#ws-target', '#ws-url', '#ws-model', '#ws-context', '#ws-style', '#ws-provider', '#ws-thinking']
     .forEach((sel) => { $(sel).disabled = on; });
 
   // Review controls: disable editing actions; "↻ All" becomes a Stop control.
   ['#rv-retrans-seg', '#rv-prev', '#rv-next', '#rv-save', '#rv-review-all', '#rv-fr']
     .forEach((sel) => { const el = $(sel); if (el) el.disabled = on; });
   const all = $('#rv-retrans-all');
-  if (all) { all.textContent = on ? t('rv.stop') : t('rv.all'); all.classList.toggle('btn-stop', on); }
+  if (all) {
+    all.innerHTML = `${icon(on ? 'square' : 'list-restart')}<span>${escapeHtml(t(on ? 'rv.stop' : 'rv.all'))}</span>`;
+    all.classList.toggle('btn-stop', on);
+    all.title = t(on ? 'rv.stop' : 'rv.all');
+  }
 }
 
 async function toggleRun() {
@@ -352,7 +655,7 @@ async function runConnectionTest(url, out) {
   out.textContent = t('test.testing');
   const r = await window.api.testConnection((url || '').trim());
   out.className = 'test-result ' + (r.ok ? 'ok' : 'bad');
-  out.textContent = (r.ok ? '✓ ' : '✕ ') + t('test.' + r.code, r.params);
+  out.innerHTML = `${icon(r.ok ? 'circle-check' : 'circle-alert')}<span>${escapeHtml(t('test.' + r.code, r.params))}</span>`;
 }
 $('#ws-test').addEventListener('click', () => runConnectionTest($('#ws-url').value, $('#ws-test-result')));
 
@@ -387,17 +690,17 @@ async function doExport() {
   if (!r || r.canceled) return;
   const F = (r.format || fmt).toUpperCase();
   if (r.untranslated > 0) {
-    toast(t('toast.exportedWarn', { fmt: F, u: r.untranslated, n: r.total }));
+    toast(t('toast.exportedWarn', { fmt: F, u: r.untranslated, n: r.total }), 'info');
     logLine(t('log.exportedWarn', { fmt: F, path: r.path, u: r.untranslated, n: r.total }), 'info');
   } else {
-    toast(t('toast.exported', { n: r.total, fmt: F }));
+    toast(t('toast.exported', { n: r.total, fmt: F }), 'success');
     logLine(t('log.exported', { fmt: F, path: r.path }), 'success');
   }
 }
 
 // The Workspace's secondary button exports the current project.
 function updatePrimaryAction() {
-  $('#ws-export').textContent = t('ws.export');
+  // The Export label is a data-i18n span now; nothing dynamic left here.
 }
 
 $('#ws-export').addEventListener('click', openExportModal);
@@ -433,7 +736,7 @@ window.api.onEngineEvent(async (ev) => {
       break;
     case 'done':
       if (ev.counts) renderProgress(ev.counts);
-      if (ev.reason === 'completed') { logLine(t('log.allTranslated'), 'success'); toast(t('toast.complete')); }
+      if (ev.reason === 'completed') { logLine(t('log.allTranslated'), 'success'); toast(t('toast.complete'), 'success'); }
       else if (ev.reason === 'stopped') { logLine(t('log.stopped'), 'info'); }
       setEngineRunning(false);
       $('#ws-run').disabled = false;
@@ -488,13 +791,13 @@ async function pickFile() {
   if (result.error) {                       // parse failure (corrupt EPUB/DOCX, etc.)
     pickedManuscript = null;
     $('#np-create').disabled = true;
-    toast(t('toast.importError'));
+    toast(t('toast.importError'), 'error');
     return;
   }
   if (Array.isArray(result.blocks) && result.blocks.length === 0) {
     pickedManuscript = null;
     $('#np-create').disabled = true;
-    toast(t('toast.importEmpty'));
+    toast(t('toast.importEmpty'), 'error');
     return;
   }
 
@@ -524,7 +827,7 @@ async function createProject() {
   $('#np-create').disabled = true;
   const project = await window.api.createProject(input);
   closeNewProjectModal();
-  toast(t('toast.created', { name: project.name, n: project.segments.length }));
+  toast(t('toast.created', { name: project.name, n: project.segments.length }), 'success');
   await renderLibrary();
   openBook(project.id); // land on the new book's hub
 }
@@ -538,7 +841,7 @@ $('#new-project-modal').addEventListener('click', (e) => {
   if (e.target.id === 'new-project-modal') closeNewProjectModal(); // click backdrop to close
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { closeNewProjectModal(); closeRetransModal(); closeExportModal(); closeFrModal(); closeRenameModal(); }
+  if (e.key === 'Escape') { closeNewProjectModal(); closeRetransModal(); closeExportModal(); closeFrModal(); closeRenameModal(); closeShortcuts(); }
 });
 
 // ============================================================================
@@ -600,7 +903,7 @@ function renderNavWindow() {
     row.innerHTML =
       `<span class="num">${idx + 1}</span>` +
       `<span class="dot ${statusClass(seg.status)}"></span>` +
-      `<span class="snippet">${typeTag}${snippet}</span>`;
+      `<span class="snippet" dir="auto">${typeTag}${snippet}</span>`;
     row.addEventListener('click', () => selectSegment(idx));
     frag.appendChild(row);
   }
@@ -846,7 +1149,7 @@ async function frReplaceAll() {
   $('#fr-go').disabled = true;
   await window.api.saveProject(currentProject); // one atomic write of the whole project
   closeFrModal();
-  toast(t('fr.done', { n: totalMatches, m: changedSegs }));
+  toast(t('fr.done', { n: totalMatches, m: changedSegs }), 'success');
   updateFilterCounts();
   selectSegment(reviewIndex); // refresh editor + navigator snippets
 }
@@ -882,7 +1185,7 @@ document.addEventListener('keydown', (e) => {
 async function retranslateCurrent() {
   if (!currentProject || isRunning) return;
   const seg = currentProject.segments[reviewIndex];
-  if (seg.status === 'reviewed' && !confirm(t('confirm.retransReviewed'))) return;
+  if (seg.status === 'reviewed' && !await askConfirm({ title: t('confirm.retransTitle'), body: t('confirm.retransReviewed'), ok: t('confirm.retransOk') })) return;
   if (reviewDirty) await persistCurrent(false);
   setEngineRunning(true);
   await window.api.retranslateSegment(currentProject.id, seg.id);
@@ -923,13 +1226,13 @@ async function markAllReviewed() {
     (s) => s.translation && s.translation.trim() && s.status !== 'reviewed'
   ).length;
   if (n === 0) { toast(t('toast.nothingMark')); return; }
-  if (!confirm(t('confirm.markAll', { n }))) return;
+  if (!await askConfirm({ title: t('confirm.markAllTitle'), body: t('confirm.markAll', { n }), ok: t('rv.reviewAll') })) return;
   if (reviewDirty) await persistCurrent(false);
   await window.api.markAllReviewed(currentProject.id);
   currentProject = await window.api.getProject(currentProject.id);
   renderNavWindow();
   updateEditorHead();
-  toast(t('toast.allReviewed'));
+  toast(t('toast.allReviewed'), 'success');
 }
 
 $('#rv-retrans-seg').addEventListener('click', retranslateCurrent);
@@ -1025,12 +1328,12 @@ async function addSelectionToGlossary(scope) {
     g.push({ id: crypto.randomUUID(), source, target });
     await window.api.saveGlobalGlossary(g);
     globalGlossary = g;
-    toast(t('gloss.addedShared', { src: source }));
+    toast(t('gloss.addedShared', { src: source }), 'success');
   } else {
     if (!Array.isArray(currentProject.glossary)) currentProject.glossary = [];
     currentProject.glossary.push({ id: crypto.randomUUID(), source, target });
     await window.api.saveGlossary(currentProject.id, currentProject.glossary);
-    toast(t('gloss.addedProject', { src: source }));
+    toast(t('gloss.addedProject', { src: source }), 'success');
   }
   hideGlossPop();
 }
@@ -1104,7 +1407,7 @@ function renderTermList(name) {
       `<input class="js-src" type="text" value="${escapeHtml(term.source)}" />` +
       `<span class="arrow">→</span>` +
       `<input class="js-tgt" type="text" value="${escapeHtml(term.target)}" />` +
-      `<button class="js-del" title="Delete">✕</button>`;
+      `<button class="js-del" title="${escapeHtml(t('common.delete'))}">${icon('trash-2')}</button>`;
     row.querySelector('.js-tgt').dir = rtl ? 'rtl' : 'auto';
     row.querySelector('.js-src').addEventListener('change', (e) => editTerm(name, term.id, 'source', e.target.value));
     row.querySelector('.js-tgt').addEventListener('change', (e) => editTerm(name, term.id, 'target', e.target.value));
@@ -1215,7 +1518,7 @@ function renderSuggestions() {
       `<input class="js-stgt" type="text" placeholder="${escapeHtml(t('gloss.suggestTgtPh'))}" />` +
       `<button class="btn btn-primary btn-sm js-add-book">${escapeHtml(t('gloss.addBook'))}</button>` +
       `<button class="btn btn-ghost btn-sm js-add-shared">${escapeHtml(t('gloss.addShared'))}</button>` +
-      `<button class="js-dismiss" title="${escapeHtml(t('gloss.dismiss'))}">✕</button>`;
+      `<button class="js-dismiss" title="${escapeHtml(t('gloss.dismiss'))}">${icon('x')}</button>`;
     const tgt = row.querySelector('.js-stgt');
     tgt.dir = rtl ? 'rtl' : 'auto';
     row.querySelector('.js-add-book').addEventListener('click', () => addSuggestion('project', it.text, tgt.value));
@@ -1238,7 +1541,7 @@ async function addSuggestion(scopeName, source, target) {
   await s.save();
   renderTermList(scopeName);
   renderSuggestions(); // the newly added term is now excluded
-  toast(t('gloss.added', { term: source }));
+  toast(t('gloss.added', { term: source }), 'success');
 }
 
 async function addTerm(name) {
@@ -1281,13 +1584,13 @@ $('#gl-project-add').addEventListener('click', () => addTerm('project'));
 function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'dark'; }
 function updateThemeLabel() {
   const light = currentTheme() === 'light';
-  $('#theme-ic').textContent = light ? '☀️' : '🌙';
-  $('#theme-lbl').textContent = t(light ? 'theme.light' : 'theme.dark');
+  $('#theme-toggle').innerHTML = icon(light ? 'sun' : 'moon');
 }
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('theme', theme);
   updateThemeLabel();
+  if (typeof syncSegmented === 'function') syncSegmented();
 }
 $('#theme-toggle').addEventListener('click', () => {
   applyTheme(currentTheme() === 'light' ? 'dark' : 'light');
@@ -1297,7 +1600,10 @@ $('#theme-toggle').addEventListener('click', () => {
 //  Language (English default, Arabic optional) — persisted, full RTL
 // ============================================================================
 function updateLangLabel() {
-  $('#lang-lbl').textContent = getLang() === 'en' ? 'العربية' : 'English';
+  // Shows the language you would switch TO.
+  const en = getLang() === 'en';
+  $('#lang-lbl').textContent = en ? 'ع' : 'EN';
+  $('#lang-toggle').classList.toggle('en', !en);
 }
 $('#lang-toggle').addEventListener('click', () => {
   setLang(getLang() === 'en' ? 'ar' : 'en');
@@ -1314,35 +1620,75 @@ window.addEventListener('langchange', () => {
   if ($('#view-glossary').classList.contains('active')) renderGlossary();
   if ($('#view-settings').classList.contains('active')) renderSettings();
   if ($('#view-hub').classList.contains('active')) renderHub();
+  renderBookNav();
+  syncNavTitles();
   if (isRunning) setEngineRunning(true); // fix dynamic button labels after applyI18n reset
 });
 
 // ============================================================================
 //  Settings — app-wide defaults for new projects + appearance
 // ============================================================================
+// ---- App updates (Settings → General → Updates) ------------------------------
+async function renderAppUpdate(st) {
+  const row = $('#upd-row');
+  if (!row) return;
+  const u = st ? { ...(await window.api.appUpdateInfo()), ...st } : await window.api.appUpdateInfo();
+  $('#upd-version').textContent = t('upd.version', { v: u.version });
+  const checkBtn = (busy) => `<button class="btn btn-ghost btn-sm" id="upd-check" ${busy ? 'disabled' : ''}>${icon('refresh-cw')}${escapeHtml(t('upd.check'))}</button>`;
+  if (!u.canSelfUpdate) {
+    row.innerHTML = `<span class="eng-note">${escapeHtml(t('upd.manual'))}</span>
+      <button class="btn btn-ghost btn-sm" id="upd-open">${icon('globe')}${escapeHtml(t('upd.open'))}</button>`;
+    return;
+  }
+  let note = '';
+  if (u.state === 'checking') note = `<span class="eng-note"><span class="spinner"></span>${escapeHtml(t('upd.checking'))}</span>`;
+  else if (u.state === 'none') note = `<span class="eng-note ok">${icon('circle-check')}${escapeHtml(t('upd.none'))}</span>`;
+  else if (u.state === 'error') note = `<span class="eng-note bad">${escapeHtml(t('upd.failed'))}</span>`;
+  else if (u.state === 'downloading') note = `<span class="eng-note">${escapeHtml(t('upd.downloading', { v: u.version || '', pct: u.pct || 0 }))}</span>`;
+  if (u.state === 'ready') {
+    row.innerHTML = `<span class="eng-note ok">${icon('circle-check')}${escapeHtml(t('upd.ready', { v: u.version }))}</span>
+      <button class="btn btn-primary btn-sm" id="upd-install">${icon('refresh-cw')}${escapeHtml(t('upd.restart'))}</button>`;
+    return;
+  }
+  row.innerHTML = checkBtn(u.state === 'checking' || u.state === 'downloading') + note;
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('#upd-check, #upd-install, #upd-open');
+  if (!b) return;
+  if (b.id === 'upd-check') { b.disabled = true; await window.api.appCheckUpdate(); renderAppUpdate(); }
+  else if (b.id === 'upd-install') window.api.appInstallUpdate();
+  else if (b.id === 'upd-open') window.api.appOpenReleases();
+});
+window.api.onAppUpdate((st) => {
+  if (st.state === 'ready') toast(t('upd.readyToast', { v: st.version }), 'success');
+  if ($('#view-settings').classList.contains('active')) renderAppUpdate(st);
+});
+
 async function renderSettings() {
   const s = await window.api.getSettings();
-  $('#set-provider').value = s.provider || 'local';
+  await fillProviderSelect('#set-provider', s.provider || 'builtin');
   $('#set-source').value = s.sourceLang || 'English';
   $('#set-target').value = s.targetLang || 'Arabic';
   $('#set-url').value = s.apiUrl || 'http://localhost:1234/v1/chat/completions';
   $('#set-model').value = s.model || '';
   $('#set-context').value = s.contextWindow ?? 2;
+  $('#set-thinking').checked = !!s.thinking;
   $('#set-target').dir = isRtlLang($('#set-target').value) ? 'rtl' : 'auto';
   $('#set-test-result').textContent = '';
   $('#set-test-result').className = 'test-result';
-  applyProviderVisibility(s.provider || 'local', '#set-url-field', null);
+  const prov = s.provider || 'builtin';
+  applyProviderVisibility(prov, '#set-url-field', null);
+  if (prov === 'builtin') {
+    const chosen = await fillModelSelect('#set-bmodel', s.model, '#set-bmodel-note');
+    if (!s.model && chosen) saveSettingsForm(); // keep the shown choice, so new books get a model
+  }
+  else suggestModels('#set-model-list', prov);
+  renderAppUpdate();
+  renderModelsPanel();
   // Appearance reflects the current device state.
-  $('#set-theme').value = currentTheme();
-  $('#set-lang').value = getLang();
-  // API keys.
-  const sec = await window.api.getSecrets();
-  $('#key-openai').value = sec.openai || '';
-  $('#key-openrouter').value = sec.openrouter || '';
-  $('#key-gemini').value = sec.gemini || '';
-  $('#key-anthropic').value = sec.anthropic || '';
-  $('#key-compatible').value = sec.compatible || '';
-  $('#key-compatible-base').value = sec.compatibleBaseUrl || '';
+  syncSegmented();
+  // The open tab's own content (providers grid / built-in panel).
+  renderSettingsTab();
 }
 
 async function saveSettingsForm() {
@@ -1351,30 +1697,39 @@ async function saveSettingsForm() {
     sourceLang: $('#set-source').value.trim() || 'English',
     targetLang: $('#set-target').value.trim() || 'Arabic',
     apiUrl: $('#set-url').value.trim(),
-    model: $('#set-model').value.trim(),
+    model: $('#set-provider').value === 'builtin' ? $('#set-bmodel').value : $('#set-model').value.trim(),
     contextWindow: Math.max(0, parseInt($('#set-context').value, 10) || 0),
-  });
-}
-async function saveSecretsForm() {
-  await window.api.saveSecrets({
-    openai: $('#key-openai').value.trim(),
-    openrouter: $('#key-openrouter').value.trim(),
-    gemini: $('#key-gemini').value.trim(),
-    anthropic: $('#key-anthropic').value.trim(),
-    compatible: $('#key-compatible').value.trim(),
-    compatibleBaseUrl: $('#key-compatible-base').value.trim(),
+    thinking: $('#set-thinking').checked,
   });
 }
 
-['#set-source', '#set-target', '#set-url', '#set-model', '#set-context', '#set-provider']
+['#set-source', '#set-target', '#set-url', '#set-model', '#set-context', '#set-provider', '#set-thinking']
   .forEach((sel) => $(sel).addEventListener('change', saveSettingsForm));
-$('#set-provider').addEventListener('change', (e) =>
-  applyProviderVisibility(e.target.value, '#set-url-field', null));
-['#key-openai', '#key-openrouter', '#key-gemini', '#key-anthropic', '#key-compatible', '#key-compatible-base']
-  .forEach((sel) => $(sel).addEventListener('change', saveSecretsForm));
+$('#set-provider').addEventListener('change', async (e) => {
+  applyProviderVisibility(e.target.value, '#set-url-field', null);
+  if (e.target.value === 'builtin') { await fillModelSelect('#set-bmodel', '', '#set-bmodel-note'); saveSettingsForm(); }
+  else suggestModels('#set-model-list', e.target.value);
+});
+$('#set-bmodel').addEventListener('change', () => { fillModelSelect('#set-bmodel', $('#set-bmodel').value, '#set-bmodel-note'); saveSettingsForm(); });
 $('#set-test').addEventListener('click', () => runConnectionTest($('#set-url').value, $('#set-test-result')));
-$('#set-theme').addEventListener('change', (e) => applyTheme(e.target.value));
-$('#set-lang').addEventListener('change', (e) => setLang(e.target.value));
+// Two-option toggles for theme and language.
+function syncSegmented() {
+  const mark = (sel, val) => $$(`${sel} button`).forEach((b) => {
+    const on = b.dataset.value === val;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  mark('#set-theme', currentTheme());
+  mark('#set-lang', getLang());
+}
+$('#set-theme').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-value]');
+  if (b) { applyTheme(b.dataset.value); syncSegmented(); }
+});
+$('#set-lang').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-value]');
+  if (b && b.dataset.value !== getLang()) setLang(b.dataset.value);
+});
 
 // Language fields use a <datalist>, which Chromium filters by the current value.
 // Clear on focus so the whole list shows; restore the previous value if the user
@@ -1410,30 +1765,35 @@ function buildReaderHtml(project) {
   const parts = [];
   let listOpen = null;
   const closeList = () => { if (listOpen) { parts.push(`</${listOpen}>`); listOpen = null; } };
+  // Passages not translated yet show the original, in its own direction.
+  const srcDir = isRtlLang(project.sourceLang) ? 'rtl' : 'ltr';
 
   for (const s of project.segments) {
     const id = s.id;
     const type = s.type || 'paragraph';
     if (type === 'scene-break') { closeList(); parts.push(`<div class="rd-scene" id="rd-seg-${id}" data-seg="${id}">⁂</div>`); continue; }
-    const txt = (s.translation && s.translation.trim()) ? s.translation.trim() : s.original;
+    const done = !!(s.translation && s.translation.trim());
+    const txt = done ? s.translation.trim() : s.original;
     if (!txt) continue;
     const html = inlineMd(txt);
+    const at = `id="rd-seg-${id}" data-seg="${id}"` + (done ? '' : ` dir="${srcDir}"`);
+    const un = done ? '' : ' rd-untranslated';
     if (type === 'list-item') {
       const want = s.ordered ? 'ol' : 'ul';
       if (listOpen !== want) { closeList(); parts.push(`<${want}>`); listOpen = want; }
-      parts.push(`<li id="rd-seg-${id}" data-seg="${id}">${html}</li>`);
+      parts.push(`<li ${at} class="${un.trim()}">${html}</li>`);
       continue;
     }
     closeList();
     if (type === 'heading') {
       const lvl = Math.min(Math.max(s.level || 2, 1), 6);
-      parts.push(`<h${lvl} class="rd-h" id="rd-seg-${id}" data-seg="${id}">${html}</h${lvl}>`);
+      parts.push(`<h${lvl} class="rd-h${un}" ${at}>${html}</h${lvl}>`);
     } else if (type === 'blockquote') {
-      parts.push(`<blockquote id="rd-seg-${id}" data-seg="${id}">${html}</blockquote>`);
+      parts.push(`<blockquote ${at} class="${un.trim()}">${html}</blockquote>`);
     } else if (type === 'verse') {
-      parts.push(`<p class="rd-verse" id="rd-seg-${id}" data-seg="${id}">${html.replace(/\n/g, '<br/>')}</p>`);
+      parts.push(`<p class="rd-verse${un}" ${at}>${html.replace(/\n/g, '<br/>')}</p>`);
     } else {
-      parts.push(`<p id="rd-seg-${id}" data-seg="${id}">${html}</p>`);
+      parts.push(`<p ${at} class="${un.trim()}">${html}</p>`);
     }
   }
   closeList();
@@ -1599,22 +1959,22 @@ function addBookmarkHere() {
   saveBookmarks(pid, arr);
   renderBookmarks();
   markAnnotated();
-  toast(t('reader.marked'));
+  toast(t('reader.marked'), 'success');
 }
 function renderBookmarks() {
   const wrap = $('#rd-marks');
   const pid = currentProject ? currentProject.id : null;
   const arr = (pid ? getBookmarks(pid) : []).slice().sort((a, b) => Number(a.seg) - Number(b.seg));
   let html = `<div class="rd-marks-head"><span>${escapeHtml(t('reader.bookmarks'))}</span>` +
-    `<button class="btn btn-ghost btn-sm" id="rd-mark-add">${escapeHtml(t('reader.addMark'))}</button></div>`;
+    `<button class="btn btn-ghost btn-sm" id="rd-mark-add">${icon('plus')}${escapeHtml(t('reader.addMark'))}</button></div>`;
   if (arr.length === 0) {
     html += `<div class="rd-marks-empty">${escapeHtml(t('reader.noMarks'))}</div>`;
   } else {
     html += arr.map((b) => {
       const label = b.note ? `“${b.note}”` : segSnippet(b.seg);
-      const icon = b.note ? '✎ ' : '';
-      return `<div class="rd-mark-row" data-go="${b.seg}"><span class="rd-mark-label">${icon}${escapeHtml(label)}</span>` +
-        `<button class="rd-mark-del" data-del="${b.seg}" title="${escapeHtml(t('reader.removeMark'))}">✕</button></div>`;
+      const noteIcon = b.note ? icon('sticky-note') : '';
+      return `<div class="rd-mark-row" data-go="${b.seg}"><span class="rd-mark-label">${noteIcon}${escapeHtml(label)}</span>` +
+        `<button class="rd-mark-del" data-del="${b.seg}" title="${escapeHtml(t('reader.removeMark'))}">${icon('x')}</button></div>`;
     }).join('');
   }
   wrap.innerHTML = html;
@@ -1773,7 +2133,242 @@ $('#rd-scroll').addEventListener('scroll', () => {
   }, 400);
 });
 
+// ---- Settings: Built-in translator panel ------------------------------------
+let builtinState = { status: 'stopped' };
+async function renderEngineLine() {
+  const line = $('#engine-line');
+  if (!line) return;
+  const info = await window.api.engineInfo();
+  const st = builtinState;
+  const eng = info.engines.find((x) => x.id === info.active);
+  const engText = eng ? t('mdl.engine', { flavour: t('eng.' + eng.flavour), build: eng.build }) : t('mdl.noEngine');
+  let stText = t('bi.' + st.status);
+  if (st.status === 'ready' || st.status === 'starting') stText = t('bi.' + st.status + 'Model', { model: String(st.model || '').split(/[\\/]/).pop() });
+  if (st.status === 'error') stText = t('err.builtin.' + (st.reason || 'crash'));
+  line.innerHTML = `
+    <span class="engine-dot ${st.status}"></span>
+    <span class="engine-text"><strong>${escapeHtml(stText)}</strong><small>${escapeHtml(engText)}</small></span>
+    ${st.status === 'ready' || st.status === 'starting' ? `<button class="btn btn-ghost btn-sm" id="engine-stop">${icon('square')}${escapeHtml(t('bi.stop'))}</button>` : ''}`;
+  const stopBtn = $('#engine-stop');
+  if (stopBtn) stopBtn.addEventListener('click', () => window.api.builtinStop());
+}
+// Engine builds: NVIDIA download, choice, updates, Undo.
+let engineProgress = null;  // { flavour, phase, done, total }
+let engineUpdate = null;    // result of the last "Check for updates"
+const MB = 1024 * 1024;
+async function renderEngineActions() {
+  const box = $('#engine-actions');
+  if (!box) return;
+  const [info, sys] = await Promise.all([window.api.engineInfo(), window.api.getSystemInfo()]);
+  const has = (f) => info.engines.some((e) => e.flavour === f);
+  const nvidia = sys.gpu && sys.gpu.vendor === 'nvidia';
+  const parts = [];
+
+  if (engineProgress && engineProgress.phase !== 'idle') {
+    const p = engineProgress;
+    const pct = p.total ? Math.floor((p.done / p.total) * 100) : 0;
+    parts.push(`
+      <div class="engine-card">
+        <span class="su-spec-icon">${icon('hard-drive-download')}</span>
+        <span class="engine-card-text"><strong>${escapeHtml(t(p.phase === 'install' ? 'eng.installing' : 'eng.downloading', { name: t('eng.' + p.flavour) }))}</strong>
+          <span class="dl-bar"><span style="width:${pct}%"></span></span>
+          <small>${escapeHtml(t('eng.progress', { pct, done: Math.round(p.done / MB), total: Math.round(p.total / MB) }))}</small></span>
+        ${p.phase === 'download' ? `<button class="btn btn-ghost btn-sm" id="eng-cancel">${escapeHtml(t('np.cancel'))}</button>` : ''}
+      </div>`);
+  } else if (nvidia && !has('cuda12')) {
+    const size = engineUpdate && engineUpdate.sizes && engineUpdate.sizes.cuda12;
+    parts.push(`
+      <div class="engine-card">
+        <span class="su-spec-icon">${icon('sparkles')}</span>
+        <span class="engine-card-text"><strong>${escapeHtml(t('eng.nvidiaTitle'))}</strong>
+          <small>${escapeHtml(t('eng.nvidiaBody', { size: size ? Math.round(size / MB) : '~640' }))}</small></span>
+        <button class="btn btn-primary btn-sm" id="eng-get-cuda">${icon('download')}${escapeHtml(t('eng.download'))}</button>
+      </div>`);
+  }
+
+  // Which build runs, when there's a choice.
+  if (has('cuda12') && has('vulkan')) {
+    const cur = info.flavour === 'vulkan' ? 'vulkan' : 'cuda12';
+    parts.push(`
+      <div class="field engine-choice">
+        <label>${escapeHtml(t('eng.use'))}</label>
+        <div class="segmented" id="eng-flavour">
+          <button data-value="cuda12" class="${cur === 'cuda12' ? 'active' : ''}">${escapeHtml(t('eng.cuda12'))}</button>
+          <button data-value="vulkan" class="${cur === 'vulkan' ? 'active' : ''}">${escapeHtml(t('eng.vulkan'))}</button>
+        </div>
+      </div>`);
+  }
+
+  // Updates + Undo.
+  const active = info.engines.find((e) => e.id === info.active);
+  const sameFlavour = active ? info.engines.filter((e) => e.flavour === active.flavour).sort((a, b) => b.version - a.version) : [];
+  let upd = '';
+  if (engineUpdate && engineUpdate.ok && active) {
+    upd = engineUpdate.version > active.version
+      ? `<span class="eng-note">${escapeHtml(t('eng.updateAvail', { build: engineUpdate.build, stable: engineUpdate.stable }))}</span>
+         <button class="btn btn-primary btn-sm" id="eng-update">${icon('download')}${escapeHtml(t('eng.update'))}</button>`
+      : `<span class="eng-note ok">${icon('circle-check')}${escapeHtml(t('eng.upToDate', { build: active.build, stable: engineUpdate.stable }))}</span>`;
+  } else if (engineUpdate && !engineUpdate.ok) {
+    upd = `<span class="eng-note bad">${escapeHtml(t('eng.checkFailed'))}</span>`;
+  }
+  let undo = '';
+  if (info.pinned) {
+    undo = `<span class="eng-note">${escapeHtml(t('eng.pinned', { build: (active || {}).build || '' }))}</span>
+            <button class="btn btn-ghost btn-sm" id="eng-unpin">${escapeHtml(t('eng.useNewest'))}</button>`;
+  } else if (sameFlavour.length > 1 && active && active.id === sameFlavour[0].id) {
+    undo = `<button class="btn btn-ghost btn-sm" id="eng-undo" data-id="${escapeHtml(sameFlavour[1].id)}">${icon('arrow-left-right')}${escapeHtml(t('eng.undo', { build: sameFlavour[1].build }))}</button>`;
+  }
+  parts.push(`<div class="engine-row">
+      <button class="btn btn-ghost btn-sm" id="eng-check">${icon('refresh-cw')}${escapeHtml(t('eng.check'))}</button>${upd}${undo}</div>`);
+  box.innerHTML = parts.join('');
+}
+
+async function engineDownload(flavour) {
+  engineProgress = { flavour, phase: 'download', done: 0, total: 0 };
+  renderEngineActions();
+  const r = await window.api.engineDownload(flavour);
+  engineProgress = null;
+  if (r.ok) toast(t('eng.installed', { name: t('eng.' + flavour) }), 'success');
+  else if (r.error !== 'cancelled') toast(t('eng.failed', { msg: r.error }), 'error');
+  renderEngineLine();
+  renderEngineActions();
+}
+$('#engine-actions').addEventListener('click', async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.id === 'eng-get-cuda') engineDownload('cuda12');
+  else if (b.id === 'eng-cancel') window.api.engineCancel();
+  else if (b.id === 'eng-check') {
+    b.disabled = true;
+    engineUpdate = await window.api.engineCheckUpdate();
+    renderEngineActions();
+  } else if (b.id === 'eng-update') {
+    const info = await window.api.engineInfo();
+    const active = info.engines.find((x) => x.id === info.active);
+    engineDownload(active && active.flavour === 'cuda12' ? 'cuda12' : 'vulkan');
+  } else if (b.id === 'eng-undo') {
+    await window.api.engineUse({ pin: b.dataset.id });
+    toast(t('eng.undone'), 'success');
+    renderEngineLine(); renderEngineActions();
+  } else if (b.id === 'eng-unpin') {
+    await window.api.engineUse({ pin: null });
+    renderEngineLine(); renderEngineActions();
+  } else if (b.closest('#eng-flavour') && b.dataset.value) {
+    await window.api.engineUse({ flavour: b.dataset.value });
+    renderEngineLine(); renderEngineActions();
+  }
+});
+window.api.onEngineProgress((p) => {
+  engineProgress = p.phase === 'idle' ? null : p;
+  if ($('#view-settings').classList.contains('active')) renderEngineActions();
+});
+
+async function renderModelsPanel(refresh = false) {
+  if (!$('#models-panel')) return;
+  renderEngineLine();
+  renderEngineActions();
+  const folders = await window.api.getModelFolders();
+  $('#folder-list').innerHTML = folders.map((f) => `
+    <li><span class="folder-icon">${icon('folder')}</span><span class="folder-path" dir="ltr">${escapeHtml(f)}</span>
+      <button class="icon-btn js-rmfolder" data-folder="${escapeHtml(f)}" title="${escapeHtml(t('mdl.removeFolder'))}">${icon('x')}</button></li>`).join('');
+  const list = $('#model-list');
+  if (!folders.length) { list.innerHTML = `<p class="settings-note">${escapeHtml(t('mdl.noFolders'))}</p>`; return; }
+  list.innerHTML = `<div class="su-loading"><span class="spinner"></span>${escapeHtml(t('mdl.scanning'))}</div>`;
+  const models = await getModelFiles(refresh);
+  const s = await window.api.getSettings();
+  list.innerHTML = models.length ? models.map((m) => `
+    <div class="model-row">
+      <span class="model-text"><strong dir="auto">${escapeHtml(m.name)}</strong>
+        <small>${escapeHtml([m.params, m.quant, m.sizeGB + ' GB'].filter(Boolean).join(' · '))} · <span dir="ltr">${escapeHtml(m.folder)}</span></small></span>
+      <span class="fit-badge fit-${m.fit}">${icon(FIT_ICON[m.fit])}${escapeHtml(t('fit.' + m.fit + 'Short'))}</span>
+      ${s.provider === 'builtin' && s.model === m.path
+        ? `<span class="model-default">${icon('check')}${escapeHtml(t('mdl.isDefault'))}</span>`
+        : `<button class="btn btn-ghost btn-sm js-usemodel" data-path="${escapeHtml(m.path)}">${escapeHtml(t('mdl.useDefault'))}</button>`}
+    </div>`).join('') : `<p class="settings-note">${escapeHtml(t('mdl.noneInFolders'))}</p>`;
+}
+async function addModelFolder(dir) {
+  const r = await window.api.addModelFolder(dir);
+  if (!r) return; // cancelled
+  if (r.error) { toast(t('mdl.notFolder'), 'error'); return; }
+  modelFilesCache = null;
+  await renderModelsPanel(true);
+  const n = (await getModelFiles()).length;
+  toast(t('mdl.added', { n }), 'success');
+}
+$('#folder-add').addEventListener('click', () => addModelFolder());
+$('#models-rescan').addEventListener('click', () => { modelFilesCache = null; renderModelsPanel(true); });
+$('#models-panel').addEventListener('click', async (e) => {
+  const rm = e.target.closest('.js-rmfolder');
+  if (rm) { await window.api.removeModelFolder(rm.dataset.folder); modelFilesCache = null; renderModelsPanel(true); return; }
+  const use = e.target.closest('.js-usemodel');
+  if (use) {
+    await window.api.saveSettings({ provider: 'builtin', model: use.dataset.path });
+    toast(t('mdl.defaultSet'), 'success');
+    renderSettings();
+  }
+});
+// Drop a folder (or a .gguf inside one) onto the panel, or onto Setup.
+function wireFolderDrop(el, after) {
+  el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    el.classList.remove('drag');
+    for (const f of Array.from(e.dataTransfer.files || [])) {
+      let p = window.api.pathForFile(f);
+      if (/\.gguf$/i.test(p)) p = p.replace(/[\\/][^\\/]+$/, ''); // a model file: use its folder
+      if (p) await addModelFolder(p);
+    }
+    if (after) after();
+  });
+}
+wireFolderDrop($('#folder-drop'));
+// Stop the window from opening files dropped anywhere else.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
+window.api.onBuiltinStatus((st) => {
+  builtinState = st;
+  if ($('#view-settings').classList.contains('active')) renderEngineLine();
+});
+window.api.builtinStatus().then((st) => { builtinState = st; });
+
+// ---- Keyboard shortcuts -----------------------------------------------------
+// [keys, label key, where]. The help window (F1) is built from this list.
+const SHORTCUTS = [
+  ['F1', 'kb.help', 'kb.anywhere'],
+  ['Ctrl+O', 'kb.import', 'kb.anywhere'],
+  ['Ctrl+,', 'kb.settings', 'kb.anywhere'],
+  ['Ctrl+L', 'kb.library', 'kb.anywhere'],
+  ['Ctrl+S', 'kb.save', 'kb.inReview'],
+  ['Alt+↑', 'kb.prev', 'kb.inReview'],
+  ['Alt+↓', 'kb.next', 'kb.inReview'],
+  ['Esc', 'kb.close', 'kb.anywhere'],
+];
+function openShortcuts() {
+  $('#kb-list').innerHTML = `<table class="kb-table">${SHORTCUTS.map(([k, label, where]) => `
+    <tr><td>${k.split('+').map((p) => `<kbd>${escapeHtml(p)}</kbd>`).join('<span class="kb-plus">+</span>')}</td>
+      <td>${escapeHtml(t(label))}</td><td class="kb-where">${escapeHtml(t(where))}</td></tr>`).join('')}</table>`;
+  $('#kb-modal').classList.add('open');
+  $('#kb-close').focus();
+}
+function closeShortcuts() { $('#kb-modal').classList.remove('open'); }
+$('#kb-close').addEventListener('click', closeShortcuts);
+$('#kb-modal').addEventListener('click', (e) => { if (e.target.id === 'kb-modal') closeShortcuts(); });
+$('#set-shortcuts').addEventListener('click', openShortcuts);
+
+document.addEventListener('keydown', (e) => {
+  // Not while a dialog or Setup is open: they own the keyboard.
+  const busy = document.querySelector('.modal-backdrop.open') || !$('#setup').hidden;
+  if (e.key === 'F1') { e.preventDefault(); if (!busy) openShortcuts(); return; }
+  if (busy || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'o') { e.preventDefault(); openNewProjectModal(); }
+  else if (k === ',') { e.preventDefault(); showView('settings'); }
+  else if (k === 'l') { e.preventDefault(); showView('library'); }
+});
+
 // ---- Boot -------------------------------------------------------------------
+mountIcons();
 setLang(localStorage.getItem('lang') || 'en');   // applies static i18n + fires langchange → renderLibrary
 applyTheme(localStorage.getItem('theme') || 'dark');
 updateLangLabel();

@@ -3,7 +3,7 @@
 // over IPC (inter-process communication). The renderer can't touch the disk
 // directly; it calls these handlers through the preload bridge.
 
-const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, shell, safeStorage } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fsp = require('fs/promises');
@@ -16,9 +16,18 @@ const { epubToBlocks } = require('./src/epub');
 const { docxToBlocks } = require('./src/docx');
 const { pdfToBlocks, pdfCover } = require('./src/pdf');
 const os = require('os');
+const { getSystemInfo } = require('./src/hardware');
+const { detectLocalServers } = require('./src/local-servers');
+const { scanModelFolders } = require('./src/models');
+const { createBuiltin } = require('./src/llama');
+const llamaRelease = require('./src/llama-release');
+const hub = require('./src/hub');
+const { downloadFile } = require('./src/download');
+const providers = require('./src/providers');
 
 let store;  // initialised once the app is ready and userData path is known.
 let engine; // translation engine, created alongside the store.
+let builtin; // the built-in translator (llama-server), started on demand.
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -35,6 +44,16 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Links (e.g. "Get a key") open in the user's browser, never inside the app,
+  // and the app window never navigates away from index.html.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:\/\//i.test(url)) shell.openExternal(url); }
   });
 
   win.loadFile('index.html');
@@ -240,6 +259,222 @@ function registerIpc() {
   ipcMain.handle('engine:retranslateSegment', (e, { projectId, segmentId }) =>
     engine.retranslateSegment(projectId, segmentId, e.sender));
   ipcMain.handle('engine:testConnection', (_e, apiUrl) => engine.testConnection(apiUrl));
+  ipcMain.handle('engine:sample', (_e, cfg) => engine.sampleTranslate(cfg || {}));
+  ipcMain.handle('engine:listModels', (_e, cfg) => engine.listModels(cfg || {}));
+
+  // Providers page: the list, and which ones are set up.
+  ipcMain.handle('providers:list', async () => {
+    const s = await store.getSecrets();
+    const configured = {};
+    for (const p of providers.PROVIDERS) configured[p.id] = providers.isConfigured(p.id, s);
+    return { providers: providers.PROVIDERS, configured, encrypted: safeStorage.isEncryptionAvailable() };
+  });
+
+  // First-run Setup: what this PC can run, and AI apps already running on it.
+  ipcMain.handle('system:info', () => getSystemInfo());
+  ipcMain.handle('local:detect', () => detectLocalServers());
+
+  // Model folders for the built-in translator: scanned recursively for .gguf.
+  ipcMain.handle('models:folders', async () => (await store.getAppConfig()).modelFolders || []);
+  ipcMain.handle('models:addFolder', async (e, folder) => {
+    let dir = folder ? path.resolve(folder) : '';
+    if (!dir) {
+      const win = BrowserWindow.fromWebContents(e.sender);
+      const r = await dialog.showOpenDialog(win, { title: 'Choose a folder with models', properties: ['openDirectory'] });
+      if (r.canceled || !r.filePaths.length) return null;
+      dir = r.filePaths[0];
+    }
+    try { if (!fs.statSync(dir).isDirectory()) return { error: 'notFolder' }; } catch { return { error: 'notFolder' }; }
+    const cfg = await store.getAppConfig();
+    const list = cfg.modelFolders || [];
+    if (!list.some((f) => f.toLowerCase() === dir.toLowerCase())) list.push(dir);
+    await store.saveAppConfig({ modelFolders: list });
+    return { folders: list };
+  });
+  ipcMain.handle('models:removeFolder', async (_e, dir) => {
+    const cfg = await store.getAppConfig();
+    const list = (cfg.modelFolders || []).filter((f) => f !== dir);
+    await store.saveAppConfig({ modelFolders: list });
+    return { folders: list };
+  });
+  ipcMain.handle('builtin:status', () => (builtin ? builtin.status() : { status: 'stopped' }));
+  ipcMain.handle('builtin:engines', async () => (builtin ? builtin.listEngines() : []));
+  ipcMain.handle('builtin:stop', () => { if (builtin) builtin.stop(); });
+
+  // ---- Engine builds: NVIDIA download, updates, Undo ----------------------
+  // Downloads live in userData/engine/<flavour>-<build>/ beside a build.json,
+  // like the bundled copy. The newest of bundled vs downloaded runs (see
+  // src/llama.js pickEngine); Undo pins the previous build.
+  let engineDl = null; // { flavour, ac }
+  const engineRoot = () => path.join(app.getPath('userData'), 'engine');
+  const sendAll = (ch, payload) => { for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send(ch, payload); } catch { /* closing */ } } };
+
+  ipcMain.handle('engine:info', async () => {
+    const cfg = await store.getAppConfig();
+    const engines = await builtin.listEngines();
+    const active = await builtin.pickEngine();
+    return {
+      engines: engines.map((e) => ({ flavour: e.flavour, build: e.build, version: e.version, source: e.source, id: `${e.flavour}-${e.build}` })),
+      active: active ? `${active.flavour}-${active.build}` : null,
+      flavour: cfg.engineFlavour || 'auto',
+      pinned: cfg.enginePinned || null,
+      downloading: engineDl ? engineDl.flavour : null,
+    };
+  });
+
+  ipcMain.handle('app:updateInfo', () => ({
+    version: require('./package.json').version,
+    canSelfUpdate: !!appUpdater(),
+    portable: !!process.env.PORTABLE_EXECUTABLE_DIR,
+    releasesUrl: 'https://github.com/Faadred/ProseArc/releases/latest',
+    ...updateState,
+  }));
+  ipcMain.handle('app:checkUpdate', async () => {
+    const u = appUpdater();
+    if (!u) return { ok: false, error: 'unsupported' };
+    if (updateState.state === 'downloading' || updateState.state === 'ready') return { ok: true };
+    try { await u.checkForUpdates(); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; }
+  });
+  ipcMain.handle('app:installUpdate', () => {
+    const u = appUpdater();
+    if (u && updateState.state === 'ready') { if (builtin) builtin.stop(); u.quitAndInstall(); }
+  });
+  ipcMain.handle('app:openReleases', () => shell.openExternal('https://github.com/Faadred/ProseArc/releases/latest'));
+
+  ipcMain.handle('engine:checkUpdate', async () => {
+    try {
+      const info = await llamaRelease.getStableBuild();
+      const sizes = {};
+      for (const f of ['vulkan', 'cuda12']) {
+        try { sizes[f] = llamaRelease.flavourAssets(info, f).reduce((n, a) => n + a.size, 0); } catch { /* not offered */ }
+      }
+      return { ok: true, stable: info.stable, build: info.build, version: Number(info.build.slice(1)), date: info.date, sizes };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('engine:download', async (_e, flavour) => {
+    if (engineDl) return { ok: false, error: 'busy' };
+    const ac = new AbortController();
+    engineDl = { flavour, ac };
+    const tmp = path.join(engineRoot(), '.downloads');
+    try {
+      const info = await llamaRelease.getStableBuild();
+      const assets = llamaRelease.flavourAssets(info, flavour);
+      const total = assets.reduce((n, a) => n + a.size, 0);
+      let before = 0;
+      const zips = [];
+      for (const a of assets) {
+        const zip = path.join(tmp, a.name);
+        await llamaRelease.downloadChecked(a.url, zip, a.sha256, (d) => {
+          sendAll('engine:progress', { flavour, phase: 'download', done: before + d, total });
+        }, ac.signal);
+        before += a.size;
+        zips.push(zip);
+      }
+      sendAll('engine:progress', { flavour, phase: 'install', done: total, total });
+      const id = `${flavour}-${info.build}`;
+      const dir = path.join(engineRoot(), id);
+      await fsp.rm(dir, { recursive: true, force: true });
+      for (const z of zips) await llamaRelease.extractZip(z, path.join(dir, 'bin'));
+      const exe = await llamaRelease.findServerExe(dir);
+      const version = exe ? await llamaRelease.serverVersion(exe) : null;
+      if (!version) { await fsp.rm(dir, { recursive: true, force: true }); throw new Error('The downloaded engine did not start (llama-server --version).'); }
+      await fsp.writeFile(path.join(dir, 'build.json'), JSON.stringify({ stable: info.stable, build: info.build, flavour, version, exe: path.relative(dir, exe) }, null, 2));
+      for (const z of zips) await fsp.rm(z, { force: true });
+      // Keep this build and the one before it of the same flavour (for Undo).
+      const same = (await builtin.listEngines()).filter((e) => e.source === 'downloaded' && e.flavour === flavour).sort((a, b) => b.version - a.version);
+      for (const old of same.slice(2)) await fsp.rm(old.dir, { recursive: true, force: true });
+      await store.saveAppConfig({ engineFlavour: flavour, enginePinned: null });
+      builtin.stop(); // next translation starts the new build
+      return { ok: true, id, version };
+    } catch (err) {
+      return { ok: false, error: ac.signal.aborted ? 'cancelled' : err.message };
+    } finally {
+      engineDl = null;
+      sendAll('engine:progress', { flavour, phase: 'idle' });
+    }
+  });
+  ipcMain.handle('engine:cancel', () => { if (engineDl) engineDl.ac.abort(); });
+
+  // ---- Hugging Face: find and download models -----------------------------
+  // Downloads go to <download folder>/<owner>/<repo>/<file> (LM Studio's
+  // layout), and that folder is added to the model folders so the built-in
+  // translator sees new models at once.
+  let modelDl = null; // { repo, file, ac, progress }
+  async function downloadFolder() {
+    const cfg = await store.getAppConfig();
+    return cfg.downloadFolder || (cfg.modelFolders || [])[0] || path.join(app.getPath('documents'), 'ProseArc Models');
+  }
+  ipcMain.handle('hub:search', async (_e, query) => {
+    try { return { ok: true, results: await hub.searchModels(query || '') }; }
+    catch (err) { return { ok: false, error: err.message }; }
+  });
+  ipcMain.handle('hub:files', async (_e, repo) => {
+    try { return { ok: true, files: await hub.listRepoFiles(repo, await getSystemInfo()) }; }
+    catch (err) { return { ok: false, error: err.message, status: err.status }; }
+  });
+  ipcMain.handle('hub:folder', () => downloadFolder());
+  ipcMain.handle('hub:chooseFolder', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const r = await dialog.showOpenDialog(win, { title: 'Download models to…', properties: ['openDirectory', 'createDirectory'] });
+    if (r.canceled || !r.filePaths.length) return null;
+    await store.saveAppConfig({ downloadFolder: r.filePaths[0] });
+    return r.filePaths[0];
+  });
+  ipcMain.handle('hub:state', () => (modelDl ? { repo: modelDl.repo, file: modelDl.file, progress: modelDl.progress } : null));
+  ipcMain.handle('hub:download', async (_e, { repo, file }) => {
+    if (modelDl) return { ok: false, error: 'busy' };
+    const ac = new AbortController();
+    modelDl = { repo, file: file.path, ac, progress: null };
+    try {
+      const root = await downloadFolder();
+      const dest = path.join(root, ...repo.split('/'), ...file.path.split('/'));
+      const url = `https://huggingface.co/${repo}/resolve/main/${file.path.split('/').map(encodeURIComponent).join('/')}`;
+      await downloadFile({
+        url, dest, sha256: file.sha256, size: file.size, signal: ac.signal,
+        onProgress: (p) => { modelDl.progress = p; sendAll('hub:progress', { repo, file: file.path, ...p }); },
+      });
+      // Make sure the built-in translator looks in the download folder.
+      const cfg = await store.getAppConfig();
+      const folders = cfg.modelFolders || [];
+      const inside = folders.some((f) => path.resolve(dest).toLowerCase().startsWith(path.resolve(f).toLowerCase() + path.sep));
+      if (!inside) await store.saveAppConfig({ modelFolders: [...folders, root] });
+      return { ok: true, path: dest };
+    } catch (err) {
+      return { ok: false, error: err.code || 'failed', message: err.message, needGB: err.needGB };
+    } finally {
+      modelDl = null;
+      sendAll('hub:progress', { repo, file: file.path, phase: 'idle' });
+    }
+  });
+  ipcMain.handle('hub:cancel', () => { if (modelDl) modelDl.ac.abort(); });
+
+  // Choose which build runs: { flavour } ('auto' | 'vulkan' | 'cuda12') or { pin: id | null }.
+  ipcMain.handle('engine:use', async (_e, choice) => {
+    const patch = {};
+    if (choice && 'flavour' in choice) { patch.engineFlavour = choice.flavour; patch.enginePinned = null; }
+    if (choice && 'pin' in choice) patch.enginePinned = choice.pin;
+    await store.saveAppConfig(patch);
+    builtin.stop();
+    return true;
+  });
+  ipcMain.handle('models:list', async () => {
+    const cfg = await store.getAppConfig();
+    return scanModelFolders(cfg.modelFolders || [], await getSystemInfo());
+  });
+  // Apply AI settings to every existing book (Setup's "use for my books too").
+  ipcMain.handle('projects:applyAi', async (_e, ai) => {
+    const keys = ['provider', 'apiUrl', 'model', 'thinking'];
+    const list = await store.listProjects();
+    for (const s of list) {
+      const p = await store.getProject(s.id);
+      for (const k of keys) if (ai && k in ai) p[k] = ai[k];
+      await store.saveProject(p);
+    }
+    return list.length;
+  });
   ipcMain.handle('projects:resetForRetranslate', (_e, { projectId, includeReviewed }) =>
     store.resetForRetranslate(projectId, includeReviewed));
   ipcMain.handle('projects:markAllReviewed', (_e, projectId) => store.markAllReviewed(projectId));
@@ -265,30 +500,67 @@ function migrateLegacyUserData() {
   }
 }
 
+// ---- App updates from GitHub releases ---------------------------------------
+// Installed builds only: the portable exe has no install location to update,
+// and dev runs aren't packaged. Those get a link to the releases page instead.
+let updater;             // electron-updater's autoUpdater, set up once
+let updateState = { state: 'idle' };
+const canSelfUpdate = () => app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR;
+function setUpdateState(s) {
+  updateState = s;
+  for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('app:update', s); } catch { /* closing */ } }
+}
+function appUpdater() {
+  if (updater !== undefined) return updater;
+  updater = null;
+  if (!canSelfUpdate()) return updater;
+  try {
+    const { autoUpdater } = require('electron-updater');
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on('checking-for-update', () => setUpdateState({ state: 'checking' }));
+    autoUpdater.on('update-not-available', () => setUpdateState({ state: 'none' }));
+    autoUpdater.on('update-available', (i) => setUpdateState({ state: 'downloading', version: i.version, pct: 0 }));
+    autoUpdater.on('download-progress', (p) => setUpdateState({ ...updateState, state: 'downloading', pct: Math.floor(p.percent || 0) }));
+    autoUpdater.on('update-downloaded', (i) => setUpdateState({ state: 'ready', version: i.version }));
+    autoUpdater.on('error', (err) => setUpdateState({ state: 'error', error: String((err && err.message) || err) }));
+    updater = autoUpdater;
+  } catch { /* updater unavailable — never block app start */ }
+  return updater;
+}
+
 app.whenReady().then(() => {
   // userData is the OS-specific per-app data folder (safe, writable, persists
   // across app updates). Projects live in a subfolder of it.
   migrateLegacyUserData();
-  store = createStore(path.join(app.getPath('userData'), 'projects'));
-  engine = createEngine({ store });
+  // API keys are encrypted with Windows' DPAPI (only this Windows user can read them).
+  const protect = {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (buf) => safeStorage.decryptString(buf),
+  };
+  store = createStore(path.join(app.getPath('userData'), 'projects'), protect);
+  builtin = createBuiltin({ app, store });
+  engine = createEngine({ store, builtin });
+  // Tell every window when the built-in translator starts, loads, fails or stops.
+  builtin.onStatus((st) => {
+    for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('builtin:status', st); } catch { /* closing */ } }
+  });
 
   registerIpc();
   createWindow();
 
-  // Auto-update from GitHub releases (installed builds only — the portable
-  // exe has no install location to update, and dev runs aren't packaged).
-  if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) {
-    try {
-      const { autoUpdater } = require('electron-updater');
-      autoUpdater.on('error', () => {}); // being offline is normal; stay quiet
-      autoUpdater.checkForUpdatesAndNotify().catch(() => {});
-    } catch { /* updater unavailable — never block app start */ }
-  }
+  // Check GitHub for a new version on start (downloads in the background;
+  // installs on quit or with "Restart to update" in Settings).
+  if (appUpdater()) appUpdater().checkForUpdates().catch(() => {});
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+// Never leave llama-server running after ProseArc closes.
+app.on('will-quit', () => { if (builtin) builtin.stop(); });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
