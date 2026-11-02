@@ -82,10 +82,10 @@ node --check main.js renderer.js preload.js setup.js icons.js i18n.js src/*.js  
   decides when). Commits: redesign (cfe7375, 34bce66), Setup (3afac1d), built-in llama.cpp (6ff7ed3),
   Hugging Face models (1364b01), Providers + encrypted keys (cc59fb4), then Setup switch/skip, neutral provider
   wording and this README/notes update. Next: the user tests the branch (`start.bat`), then **step 6, release**.
-- Step 6 so far: version 1.4.0, `build.publish.owner` → `Faadred`, README intro updated, release notes
-  drafted in `RELEASE_NOTES_v1.4.0.md` (untracked; SHA-256 filled in after `npm run dist`). Still to do: remake the README screenshots
-  from a public-domain or made-up book (they still show the old look); release notes in the user's format (see
-  memory); `npm run dist` now fetches the engine first.
+- Step 6 so far (2026-11-02): version 1.4.0, `build.publish.owner` → `Faadred`, README intro + new screenshots
+  (public-domain books on a demo profile), app updates in Settings → General → Updates (`app:*` IPC; portable/dev
+  get a link to the releases page), installer built (`dist/ProseArc-Setup-1.4.0.exe`), release notes in
+  `RELEASE_NOTES_v1.4.0.md` (untracked). Branch pushed with a PR to `main`. Left: merge, then `gh release`.
 - Not tested yet: a full translation with a real cloud key (no keys used; LM Studio, Groq 401 and the Hugging
   Face router were checked live); engine Undo (needs a newer llama.cpp stable); a multi-GB Hugging Face download
   (only a 100 MB model was downloaded).
