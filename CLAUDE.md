@@ -64,6 +64,18 @@ npm test           # node:test suites in test/ (no network: fake servers on 127.
   `<download folder>/<owner>/<repo>/<file>`; the default download folder is the first model folder (the user's
   real `E:\Ai\lm-studio\models`), so in tests always point the demo profile's `downloadFolder` at a scratch
   folder first.
+- Folder import + queue (2026-11-04, step 1 of the user's folder plan): `src/scan.js` walks a folder and the folders
+  inside it (book files only, natural order, depth 8, hidden skipped); each folder is a series (`project.series`,
+  e.g. "Fantasy / Saga"; files in the root get the root's name), each file a book with `project.source` (path, size,
+  mtime) so a re-scan skips files already imported. `folder:*` IPC in `main.js` (one `readManuscript()` for single
+  and folder imports). `src/queue.js`: books translated one after another, saved in `queue.json`, paused after a
+  restart; setup errors (no/bad key, unreachable, built-in problems) pause the queue, other errors only mark the book.
+  Engine events now carry `projectId`; the open book's screens ignore other books' events; manual Translate is refused
+  while the queue runs. UI in `folders-ui.js` (Import folder dialog, queue panel, card badges); the Library groups
+  books into series shelves. Online providers: a confirm with the word count before the queue starts.
+  Try it with `test-library\` (git-ignored, made-up books); in the demo profile a fake OpenAI-compatible server on
+  127.0.0.1 stands in for a model. Next steps the user agreed to: a shared glossary per series, then watched folders
+  (check on start + "Check now", auto-translate off by default).
 - Data: `%APPDATA%\prosearc\` (`projects\`, `glossary-global.json`, settings, keys, `app-config.json` for
   model folders + engine choice, `engine\`).
 - Providers (step 5): one registry, `src/providers.js` (id, kind builtin/local/cloud/custom, base URL, key link),

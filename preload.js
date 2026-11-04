@@ -74,6 +74,29 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('hub:progress', listener);
     return () => ipcRenderer.removeListener('hub:progress', listener);
   },
+  // Folder import (a folder of books and the folders inside it) and the translation queue
+  pickFolder: () => ipcRenderer.invoke('folder:pick'),
+  scanFolder: (root) => ipcRenderer.invoke('folder:scan', root),
+  importFolder: (input) => ipcRenderer.invoke('folder:import', input),
+  onFolderProgress: (callback) => {
+    const listener = (_e, p) => callback(p);
+    ipcRenderer.on('folder:progress', listener);
+    return () => ipcRenderer.removeListener('folder:progress', listener);
+  },
+  queueGet: () => ipcRenderer.invoke('queue:get'),
+  queueAdd: (ids) => ipcRenderer.invoke('queue:add', ids),
+  queueRemove: (id) => ipcRenderer.invoke('queue:remove', id),
+  queueMove: (id, delta) => ipcRenderer.invoke('queue:move', { id, delta }),
+  queueClearFinished: () => ipcRenderer.invoke('queue:clearFinished'),
+  queueRetry: (id) => ipcRenderer.invoke('queue:retry', id),
+  queueStart: () => ipcRenderer.invoke('queue:start'),
+  queuePause: () => ipcRenderer.invoke('queue:pause'),
+  onQueueState: (callback) => {
+    const listener = (_e, s) => callback(s);
+    ipcRenderer.on('queue:state', listener);
+    return () => ipcRenderer.removeListener('queue:state', listener);
+  },
+
   // App updates from GitHub releases
   appUpdateInfo: () => ipcRenderer.invoke('app:updateInfo'),
   appCheckUpdate: () => ipcRenderer.invoke('app:checkUpdate'),

@@ -151,13 +151,30 @@ async function renderLibrary() {
         </ol>
       </div>`;
     $('#empty-new').addEventListener('click', openNewProjectModal);
+    renderQueuePanel();
     return;
   }
 
-  body.innerHTML = `<div class="book-grid">${projects.map(cardHtml).join('')}
-    <button class="book-add" id="lib-add">
+  const addTile = `<button class="book-add" id="lib-add">
       <span class="book-add-inner"><span class="book-add-icon">${icon('plus')}</span><span>${t('lib.addTile')}</span></span>
-    </button></div>`;
+    </button>`;
+  const shelves = groupBySeries(projects);
+  if (shelves.length === 1 && !shelves[0].series) {
+    body.innerHTML = `<div class="book-grid">${projects.map(cardHtml).join('')}${addTile}</div>`;
+  } else {
+    // Folder imports: one shelf per series (its folder), loose books last.
+    body.innerHTML = shelves.map((sh, i) => {
+      const tot = sh.books.reduce((n, p) => n + p.counts.total, 0);
+      const tr = sh.books.reduce((n, p) => n + p.counts.translated, 0);
+      const pct = tot ? Math.round((tr / tot) * 100) : 0;
+      return `<section class="shelf">
+        <header class="shelf-head"><span class="shelf-icon">${icon(sh.series ? 'folder' : 'library')}</span>
+          <h2 class="shelf-title" dir="auto">${escapeHtml(sh.series || t('lib.otherBooks'))}</h2>
+          <span class="shelf-meta">${escapeHtml(t(sh.books.length === 1 ? 'lib.seriesCount1' : 'lib.seriesCount', { n: sh.books.length, pct }))}</span></header>
+        <div class="book-grid">${sh.books.map(cardHtml).join('')}${i === shelves.length - 1 ? addTile : ''}</div>
+      </section>`;
+    }).join('');
+  }
   $('#lib-add').addEventListener('click', openNewProjectModal);
 
   projects.forEach((p) => {
@@ -179,6 +196,7 @@ async function renderLibrary() {
     });
   });
 
+  renderQueuePanel();
   // The list holds summaries only; fetch each book once for its cover image.
   const full = await Promise.all(projects.map((p) => window.api.getProject(p.id).catch(() => null)));
   full.forEach((p) => {
@@ -186,6 +204,24 @@ async function renderLibrary() {
     const el = body.querySelector(`.book-card[data-id="${p.id}"] .book-cover`);
     if (el) el.innerHTML = coverHtml(p);
   });
+}
+
+// Shelves for the Library: series in name order (books in file order), loose books last.
+const seriesCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+function groupBySeries(projects) {
+  const map = new Map();
+  for (const p of projects) {
+    const k = p.series || '';
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(p);
+  }
+  const keyOf = (p) => (p.source && p.source.path) || p.name;
+  const shelves = [...map.entries()].map(([series, books]) => ({
+    series,
+    books: series ? books.sort((a, b) => seriesCollator.compare(keyOf(a), keyOf(b))) : books,
+  }));
+  shelves.sort((a, b) => (!a.series ? 1 : !b.series ? -1 : seriesCollator.compare(a.series, b.series)));
+  return shelves;
 }
 
 function cardHtml(p) {
@@ -197,7 +233,7 @@ function cardHtml(p) {
   return `
     <article class="book-card" data-id="${p.id}" tabindex="0" aria-label="${escapeHtml(p.name)}">
       <div class="book-cover">${coverHtml(p)}</div>
-      ${done ? `<span class="book-badge">${icon('circle-check')}${t('card.done')}</span>` : ''}
+      ${done ? `<span class="book-badge">${icon('circle-check')}${t('card.done')}</span>` : queueBadge(p.id)}
       <button class="icon-btn book-menu js-menu" aria-haspopup="menu" aria-label="${t('card.more')}" title="${t('card.more')}">${icon('ellipsis')}</button>
       <div class="book-info">
         <h3 class="book-title" dir="auto">${escapeHtml(p.name)}</h3>
@@ -223,6 +259,7 @@ function bookMenuItems(id, { withRemoveCover = false } = {}) {
     { icon: 'pencil', label: t('hub.rename'), action: withBook(openRenameModal) },
     { icon: 'image', label: t('hub.cover'), action: withBook(changeCover) },
   ];
+  if (!inQueue(id)) items.push({ icon: 'list-restart', label: t('queue.addBook'), action: () => addToQueue([id]) });
   if (withRemoveCover) items.push({ icon: 'x', label: t('hub.coverRemove'), action: withBook(removeCover) });
   items.push({ icon: 'trash-2', label: t('card.delete'), danger: true, action: withBook(deleteBook) });
   return items;
@@ -644,7 +681,8 @@ async function toggleRun() {
   }
   clearError();
   setEngineRunning(true);
-  await window.api.startTranslation(currentProject.id);
+  const r = await window.api.startTranslation(currentProject.id);
+  if (r && r.busy) { setEngineRunning(false); toast(t('queue.busyManual'), 'info'); }
 }
 
 $('#ws-run').addEventListener('click', toggleRun);
@@ -714,9 +752,15 @@ $('#export-modal').addEventListener('click', (e) => { if (e.target.id === 'expor
 
 // Stream of engine events from the main process.
 window.api.onEngineEvent(async (ev) => {
+  // The queue may be translating another book in the background: only the
+  // open book's events belong on these screens.
+  if (ev.projectId && ev.projectId !== currentProjectId) return;
   switch (ev.type) {
     case 'started':
-      if (ev.mode !== 'single') logLine(t('log.runStarted'), 'info');
+      if (ev.mode !== 'single') {
+        logLine(t('log.runStarted'), 'info');
+        if (!isRunning) setEngineRunning(true); // started by the queue
+      }
       break;
     case 'progress':
       renderProgress(ev.counts);

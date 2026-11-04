@@ -109,6 +109,9 @@ function createStore(projectsDir, protect = null) {
           sourceLang: project.sourceLang,
           targetLang: project.targetLang,
           counts: countStatuses(project.segments || []),
+          series: project.series || '',
+          source: project.source || null,
+          createdAt: project.createdAt,
           updatedAt: project.updatedAt,
         });
       } catch {
@@ -131,7 +134,7 @@ function createStore(projectsDir, protect = null) {
    * @param {Array} [input.blocks] - pre-parsed typed blocks (overrides text).
    * @param {object} [input.settings] - any of the DEFAULTS to override.
    */
-  async function createProject({ name, text, blocks, settings = {} }) {
+  async function createProject({ name, text, blocks, settings = {}, series = '', source = null }) {
     const now = new Date().toISOString();
     const rawSegments = Array.isArray(blocks) ? segmentBlocks(blocks) : segment(text || '');
     const globalDefaults = await getSettings(); // user's saved defaults seed new projects
@@ -164,6 +167,9 @@ function createStore(projectsDir, protect = null) {
       }),
       glossary: [],
     };
+    // Folder imports: the series (folder path) and the file the book came from.
+    if (series) project.series = String(series);
+    if (source && source.path) project.source = { path: source.path, size: source.size || 0, mtimeMs: source.mtimeMs || 0 };
 
     await atomicWrite(filePath(project.id), project);
     return project;
