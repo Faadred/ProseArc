@@ -57,8 +57,12 @@
           <h1 data-i18n="lib.title">Library</h1>
           <p class="lede" id="lib-lede">Your books in translation.</p>
         </div>
-        <button class="btn btn-primary" id="new-project-btn"><i data-icon="plus"></i><span data-i18n="lib.new">Import book</span></button>
+        <div class="head-actions" id="lib-actions">
+          <button class="btn btn-ghost" id="import-folder-btn"><i data-icon="folder-plus"></i><span data-i18n="fm.btn">Import folder</span></button>
+          <button class="btn btn-primary" id="new-project-btn"><i data-icon="plus"></i><span data-i18n="lib.new">Import book</span></button>
+        </div>
       </div>
+      <div id="queue-panel" hidden></div>
       <div id="library-body"><!-- cards or empty state injected here --></div>
     </section>
 
@@ -567,6 +571,61 @@
     </div>
   </div>
 
+  <!-- Import a folder: every book in it and in the folders inside it -->
+  <div class="modal-backdrop" id="folder-modal">
+    <div class="modal modal-folder" role="dialog" aria-modal="true" aria-labelledby="fm-title">
+      <h2 id="fm-title" data-i18n="fm.title">Import a folder</h2>
+      <p class="modal-sub" data-i18n="fm.sub">Every book in the folder and in the folders inside it. Each folder becomes a series in your library.</p>
+      <div class="file-chip" id="fm-folder">
+        <span id="fm-folder-label" dir="auto">No folder chosen</span>
+        <button class="btn btn-ghost btn-sm" id="fm-pick" style="margin-inline-start:auto" data-i18n="np.choose">Choose…</button>
+      </div>
+      <div class="fm-tree" id="fm-tree" hidden></div>
+      <p class="fm-summary" id="fm-summary"></p>
+
+      <div id="fm-settings" hidden>
+        <div class="field-row">
+          <div class="field">
+            <label for="fm-source" data-i18n="f.source">Source language</label>
+            <input id="fm-source" type="text" list="lang-list" />
+          </div>
+          <div class="field">
+            <label for="fm-target" data-i18n="f.target">Target language</label>
+            <input id="fm-target" type="text" list="lang-list" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="fm-provider" data-i18n="f.provider">Provider</label>
+            <select id="fm-provider"></select>
+          </div>
+          <div class="field" id="fm-bmodel-field">
+            <label for="fm-bmodel" data-i18n="f.bmodel">Model</label>
+            <select id="fm-bmodel"></select>
+          </div>
+          <div class="field" id="fm-model-field" hidden>
+            <label for="fm-model"><span data-i18n="f.model">Model name</span></label>
+            <input id="fm-model" type="text" list="fm-model-list" data-i18n-ph="f.modelPh" placeholder="leave blank for loaded model" />
+            <datalist id="fm-model-list"></datalist>
+          </div>
+        </div>
+        <p class="settings-note" id="fm-bmodel-note"></p>
+        <details class="fold">
+          <summary data-i18n="fm.style">Translation style (optional)</summary>
+          <textarea id="fm-style" rows="3" data-i18n-ph="f.stylePh"></textarea>
+        </details>
+        <label class="check"><input type="checkbox" id="fm-queue" checked /> <span data-i18n="fm.queue">Translate them one after another</span></label>
+        <p class="settings-note" data-i18n="fm.queueNote">One book at a time, in order. You can pause, skip or reorder from the Library.</p>
+      </div>
+
+      <div class="fm-progress" id="fm-progress" hidden><span class="spinner"></span><span id="fm-progress-text"></span></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="fm-cancel" data-i18n="np.cancel">Cancel</button>
+        <button class="btn btn-primary" id="fm-import" disabled data-i18n="fm.import">Import</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Rename modal (window.prompt is unavailable in Electron) -->
   <div class="modal-backdrop" id="rename-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rn-title">
@@ -773,6 +832,7 @@
   <script src="provider-logos.js"></script>
   <script src="renderer.js"></script>
   <script src="providers-ui.js"></script>
+  <script src="folders-ui.js"></script>
   <script src="models-dialog.js"></script>
   <script src="setup.js"></script>
 </body>

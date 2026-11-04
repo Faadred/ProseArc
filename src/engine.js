@@ -210,7 +210,7 @@ function createEngine({ store, builtin }) {
     if (running) return;
     running = true;
     aborted = false;
-    emit = (payload) => { try { sender.send('engine:event', payload); } catch { /* gone */ } };
+    emit = (payload) => { try { sender.send('engine:event', { ...payload, projectId }); } catch { /* gone */ } };
 
     let project;
     try { project = await store.getProject(projectId); }
@@ -282,7 +282,7 @@ function createEngine({ store, builtin }) {
     if (running) return;
     running = true;
     aborted = false;
-    emit = (payload) => { try { sender.send('engine:event', payload); } catch { /* gone */ } };
+    emit = (payload) => { try { sender.send('engine:event', { ...payload, projectId }); } catch { /* gone */ } };
 
     let project;
     try { project = await store.getProject(projectId); }

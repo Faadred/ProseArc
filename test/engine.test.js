@@ -59,7 +59,8 @@ test('local app: translates every pending segment once, saves, sends no-thinking
   const { store, engine, project } = await setup(t, { secrets: { lmstudioBaseUrl: `${base}/v1` } });
   const events = await run(engine, (s) => engine.start(project.id, s));
 
-  assert.deepEqual(last(events), { type: 'done', reason: 'completed', counts: { total: 3, translated: 3, reviewed: 0 } });
+  assert.deepEqual(last(events), { type: 'done', reason: 'completed', counts: { total: 3, translated: 3, reviewed: 0 }, projectId: project.id });
+  assert.ok(events.every((e) => e.projectId === project.id), 'every event names its book');
   assert.equal(calls.length, 2, 'the repeated "One." is translated once');
   assert.equal(calls[0].path, '/v1/chat/completions');
   assert.equal(calls[0].body.reasoning_effort, 'none');

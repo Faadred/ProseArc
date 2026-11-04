@@ -23,11 +23,14 @@ const { createBuiltin } = require('./src/llama');
 const llamaRelease = require('./src/llama-release');
 const hub = require('./src/hub');
 const { downloadFile } = require('./src/download');
+const { scanFolder, sameSource, bookName } = require('./src/scan');
+const { createQueue } = require('./src/queue');
 const providers = require('./src/providers');
 
 let store;  // initialised once the app is ready and userData path is known.
 let engine; // translation engine, created alongside the store.
 let builtin; // the built-in translator (llama-server), started on demand.
+let queue; // the translation queue (books one after another).
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -100,6 +103,41 @@ function coverUrlFor(id) {
   catch { return null; }
 }
 
+// Read and parse one manuscript file (single and folder imports). Returns
+// { fileName, text } or { fileName, blocks, title, cover? } or { fileName, error }.
+async function readManuscript(filePath) {
+  const fileName = path.basename(filePath);
+  const ext = path.extname(filePath).toLowerCase();
+  try {
+    if (ext === '.epub') {
+      const buf = await fsp.readFile(filePath);
+      const { title, blocks, cover } = await epubToBlocks(buf);
+      return { fileName, blocks, title, cover };
+    }
+    if (ext === '.docx') {
+      const { title, blocks } = await docxToBlocks(await fsp.readFile(filePath));
+      return { fileName, blocks, title };
+    }
+    if (ext === '.pdf') {
+      const buf = await fsp.readFile(filePath);
+      const { title, blocks } = await pdfToBlocks(buf);
+      // First page as the cover — usually the actual cover art in book PDFs.
+      const png = await pdfCover(buf);
+      return { fileName, blocks, title, cover: png ? png.toString('base64') : null };
+    }
+    // txt / md / markdown / anything else: read as UTF-8 text.
+    const text = await fsp.readFile(filePath, 'utf8');
+    return { fileName, text };
+  } catch (err) {
+    return { fileName, error: err.message || String(err) };
+  }
+}
+
+// Every open window gets these events (engine progress, queue changes, imports).
+function broadcast(ch, payload) {
+  for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send(ch, payload); } catch { /* closing */ } }
+}
+
 // ---- IPC handlers -----------------------------------------------------------
 // Each handler is async and returns a value (or throws) back to the renderer.
 
@@ -113,7 +151,7 @@ function registerIpc() {
     project.coverUrl = coverUrlFor(id);
     return project;
   });
-  ipcMain.handle('projects:delete', (_e, id) => store.deleteProject(id));
+  ipcMain.handle('projects:delete', async (_e, id) => { if (queue) await queue.removeProject(id); return store.deleteProject(id); });
   ipcMain.handle('projects:create', async (_e, input) => {
     const project = await store.createProject(input);
     if (input.cover) {
@@ -186,33 +224,7 @@ function registerIpc() {
 
     if (result.canceled || result.filePaths.length === 0) return null;
 
-    const filePath = result.filePaths[0];
-    const fileName = path.basename(filePath);
-    const ext = path.extname(filePath).toLowerCase();
-
-    try {
-      if (ext === '.epub') {
-        const buf = await fsp.readFile(filePath);
-        const { title, blocks, cover } = await epubToBlocks(buf);
-        return { fileName, blocks, title, cover };
-      }
-      if (ext === '.docx') {
-        const { title, blocks } = await docxToBlocks(await fsp.readFile(filePath));
-        return { fileName, blocks, title };
-      }
-      if (ext === '.pdf') {
-        const buf = await fsp.readFile(filePath);
-        const { title, blocks } = await pdfToBlocks(buf);
-        // First page as the cover — usually the actual cover art in book PDFs.
-        const png = await pdfCover(buf);
-        return { fileName, blocks, title, cover: png ? png.toString('base64') : null };
-      }
-      // txt / md / markdown / anything else: read as UTF-8 text.
-      const text = await fsp.readFile(filePath, 'utf8');
-      return { fileName, text };
-    } catch (err) {
-      return { fileName, error: err.message || String(err) };
-    }
+    return readManuscript(result.filePaths[0]);
   });
 
   // Export — the format is chosen in-app; here we just save & generate it.
@@ -252,9 +264,77 @@ function registerIpc() {
     return { canceled: false, path: result.filePath, total, untranslated, format: fmt.ext };
   });
 
+  // ---- Folder import: a folder of books (and the folders inside it) ---------
+  ipcMain.handle('folder:pick', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    const r = await dialog.showOpenDialog(win, { title: 'Choose a folder of books', properties: ['openDirectory'] });
+    return r.canceled || !r.filePaths.length ? null : r.filePaths[0];
+  });
+  ipcMain.handle('folder:scan', async (_e, root) => {
+    try {
+      const tree = await scanFolder(root);
+      // Mark files already in the library (same file path) so they're skipped.
+      const known = (await store.listProjects()).filter((p) => p.source).map((p) => p.source);
+      const mark = (node) => {
+        for (const f of node.files) f.imported = known.some((k) => sameSource(k, f));
+        node.folders.forEach(mark);
+      };
+      mark(tree);
+      return { ok: true, tree };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+  // input: { books: [{ path, series, size, mtimeMs }], settings, queue: bool }
+  ipcMain.handle('folder:import', async (_e, input) => {
+    const books = input.books || [];
+    const created = [];
+    const failed = [];
+    for (let i = 0; i < books.length; i++) {
+      const b = books[i];
+      broadcast('folder:progress', { done: i, total: books.length, name: path.basename(b.path) });
+      const m = await readManuscript(b.path);
+      const empty = !m.error && (Array.isArray(m.blocks) ? m.blocks.length === 0 : !String(m.text || '').trim());
+      if (m.error || empty) { failed.push({ name: m.fileName, reason: m.error ? 'error' : 'empty' }); continue; }
+      try {
+        const project = await store.createProject({
+          name: (m.title && m.title.trim()) || bookName(m.fileName),
+          text: m.text,
+          blocks: m.blocks,
+          settings: input.settings || {},
+          series: b.series,
+          source: { path: b.path, size: b.size, mtimeMs: b.mtimeMs },
+        });
+        if (m.cover) {
+          try { const jpeg = normalizeCoverJpeg(Buffer.from(m.cover, 'base64')); if (jpeg) await store.saveCover(project.id, jpeg); } catch { /* no cover */ }
+        }
+        const words = project.segments.reduce((n, s) => n + (s.original ? s.original.split(/\s+/).length : 0), 0);
+        created.push({ id: project.id, name: project.name, words });
+      } catch (err) {
+        failed.push({ name: m.fileName, reason: 'error' });
+      }
+    }
+    broadcast('folder:progress', { done: books.length, total: books.length });
+    if (input.queue && created.length) await queue.add(created.map((c) => c.id));
+    return { created, failed };
+  });
+
+  // ---- Translation queue ---------------------------------------------------
+  ipcMain.handle('queue:get', () => queue.get());
+  ipcMain.handle('queue:add', (_e, ids) => queue.add(ids));
+  ipcMain.handle('queue:remove', (_e, id) => queue.remove(id));
+  ipcMain.handle('queue:move', (_e, { id, delta }) => queue.move(id, delta));
+  ipcMain.handle('queue:clearFinished', () => queue.clearFinished());
+  ipcMain.handle('queue:retry', (_e, id) => queue.retry(id));
+  ipcMain.handle('queue:start', () => queue.start());
+  ipcMain.handle('queue:pause', () => queue.pause());
+
   // Translation engine. Events stream back on the 'engine:event' channel to the
   // window that started the run (e.sender).
-  ipcMain.handle('engine:start', (e, projectId) => engine.start(projectId, e.sender));
+  ipcMain.handle('engine:start', (e, projectId) => {
+    if (queue && queue.isRunning()) return { busy: 'queue' }; // one book at a time
+    return engine.start(projectId, e.sender);
+  });
   ipcMain.handle('engine:stop', () => engine.stop());
   ipcMain.handle('engine:retranslateSegment', (e, { projectId, segmentId }) =>
     engine.retranslateSegment(projectId, segmentId, e.sender));
@@ -542,6 +622,7 @@ app.whenReady().then(() => {
   store = createStore(path.join(app.getPath('userData'), 'projects'), protect);
   builtin = createBuiltin({ app, store });
   engine = createEngine({ store, builtin });
+  queue = createQueue({ engine, file: path.join(app.getPath('userData'), 'queue.json'), send: broadcast });
   // Tell every window when the built-in translator starts, loads, fails or stops.
   builtin.onStatus((st) => {
     for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('builtin:status', st); } catch { /* closing */ } }

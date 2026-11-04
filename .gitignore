@@ -16,3 +16,6 @@ Thumbs.db
 
 # llama.cpp engine fetched by scripts/fetch-llama.js (bundled at build time)
 vendor/
+
+# Made-up books for trying folder import (not part of the app)
+test-library/

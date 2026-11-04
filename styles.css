@@ -1704,3 +1704,63 @@ kbd {
 
 /* An Arabic (RTL) field in the English UI: show its English placeholder left to right. */
 html[lang="en"] input[dir="rtl"]:placeholder-shown { direction: ltr; text-align: right; }
+
+/* ---- Folder import, series shelves, translation queue --------------------- */
+.modal-folder { width: min(760px, 94vw); max-height: 90vh; overflow-y: auto; }
+.fm-tree {
+  margin-top: var(--s-3); max-height: 300px; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--s-2) 0;
+}
+.fm-tree ul { list-style: none; margin: 0; padding: 0; }
+.fm-line {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 6px var(--s-3); padding-inline-start: calc(var(--s-3) + var(--d, 0) * 22px);
+  font-size: var(--fs-sm); color: var(--text);
+}
+.fm-line:hover { background: var(--surface-2); }
+.fm-line small { margin-inline-start: auto; color: var(--muted); white-space: nowrap; }
+.fm-ic { display: inline-flex; color: var(--accent); }
+.fm-ic .icon { width: 16px; height: 16px; }
+.fm-file .fm-ic { color: var(--muted); }
+.fm-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-file.imported .fm-line { opacity: 0.55; cursor: default; }
+.fm-summary { color: var(--muted); font-size: var(--fs-sm); margin: var(--s-2) 0 var(--s-4); min-height: 1.2em; }
+.fm-progress { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--fs-sm); margin-top: var(--s-3); }
+.fm-progress .spinner { width: 16px; height: 16px; }
+.modal-folder .field-row .field { flex: 1; min-width: 0; }
+.modal-folder textarea { width: 100%; }
+
+.shelf { margin-bottom: var(--s-7, 40px); }
+.shelf-head { display: flex; align-items: center; gap: 10px; margin: 0 0 var(--s-4); padding-bottom: var(--s-2); border-bottom: 1px solid var(--line); }
+.shelf-icon { display: inline-flex; color: var(--accent); }
+.shelf-icon .icon { width: 20px; height: 20px; }
+.shelf-title { font-family: var(--font-serif); font-weight: 600; font-size: var(--fs-lg); margin: 0; }
+.shelf-meta { color: var(--muted); font-size: var(--fs-sm); margin-inline-start: auto; }
+
+#queue-panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg, 14px);
+  margin-bottom: var(--s-6); overflow: hidden;
+}
+.q-head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); flex-wrap: wrap; }
+.q-title-ic { display: inline-flex; color: var(--accent); }
+.q-title-ic .icon, .q-title-ic .spinner { width: 20px; height: 20px; }
+.q-sum { display: flex; flex-direction: column; min-width: 0; flex: 1 1 260px; }
+.q-sum small { color: var(--muted); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-sum small.bad { color: var(--danger); }
+.q-bar { flex: 0 1 180px; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; position: relative; }
+.q-bar i { position: absolute; inset-block: 0; inset-inline-start: 0; background: var(--status-reviewed); border-radius: 3px; }
+.q-list { list-style: none; margin: 0; padding: 0 0 var(--s-2); border-top: 1px solid var(--line); max-height: 320px; overflow-y: auto; }
+.q-row { display: flex; align-items: center; gap: var(--s-3); padding: 8px var(--s-4); }
+.q-row:hover { background: var(--surface-2); }
+.q-ic { display: inline-flex; color: var(--muted); }
+.q-ic .icon, .q-ic .spinner { width: 18px; height: 18px; }
+.q-done .q-ic { color: var(--status-reviewed); }
+.q-error .q-ic { color: var(--danger); }
+.q-running .q-ic { color: var(--accent); }
+.q-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.q-text strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-text small { color: var(--muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-badge { background: var(--surface-3); color: var(--text); }
+.q-badge.running { background: var(--accent); color: var(--accent-ink, #1C1B22); }
+.q-badge .spinner { width: 12px; height: 12px; border-width: 2px; }
+.fm-tree input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
