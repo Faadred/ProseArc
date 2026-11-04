@@ -23,14 +23,16 @@ const { createBuiltin } = require('./src/llama');
 const llamaRelease = require('./src/llama-release');
 const hub = require('./src/hub');
 const { downloadFile } = require('./src/download');
-const { scanFolder, sameSource, bookName } = require('./src/scan');
+const { scanFolder, listBooks, sameSource, bookName } = require('./src/scan');
 const { createQueue } = require('./src/queue');
+const { createWatcher } = require('./src/watch');
 const providers = require('./src/providers');
 
 let store;  // initialised once the app is ready and userData path is known.
 let engine; // translation engine, created alongside the store.
 let builtin; // the built-in translator (llama-server), started on demand.
 let queue; // the translation queue (books one after another).
+let watcher; // watched folders (new books found on start / Check now).
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -133,6 +135,41 @@ async function readManuscript(filePath) {
   }
 }
 
+// Import books found in a folder (the Import folder dialog and watched folders).
+// books: [{ path, series, size, mtimeMs }]; settings: languages, provider, model,
+// styleBrief… for every book. Returns { created: [{ id, name, words, sourcePath }],
+// failed: [{ name, path, reason }] }.
+async function importBooks(books, settings = {}) {
+  const created = [];
+  const failed = [];
+  for (let i = 0; i < books.length; i++) {
+    const b = books[i];
+    broadcast('folder:progress', { done: i, total: books.length, name: path.basename(b.path) });
+    const m = await readManuscript(b.path);
+    const empty = !m.error && (Array.isArray(m.blocks) ? m.blocks.length === 0 : !String(m.text || '').trim());
+    if (m.error || empty) { failed.push({ name: m.fileName, path: b.path, reason: m.error ? 'error' : 'empty' }); continue; }
+    try {
+      const project = await store.createProject({
+        name: (m.title && m.title.trim()) || bookName(m.fileName),
+        text: m.text,
+        blocks: m.blocks,
+        settings,
+        series: b.series,
+        source: { path: b.path, size: b.size, mtimeMs: b.mtimeMs },
+      });
+      if (m.cover) {
+        try { const jpeg = normalizeCoverJpeg(Buffer.from(m.cover, 'base64')); if (jpeg) await store.saveCover(project.id, jpeg); } catch { /* no cover */ }
+      }
+      const words = project.segments.reduce((n, sg) => n + (sg.original ? sg.original.split(/\s+/).length : 0), 0);
+      created.push({ id: project.id, name: project.name, words, sourcePath: b.path });
+    } catch {
+      failed.push({ name: m.fileName, path: b.path, reason: 'error' });
+    }
+  }
+  broadcast('folder:progress', { done: books.length, total: books.length });
+  return { created, failed };
+}
+
 // Every open window gets these events (engine progress, queue changes, imports).
 function broadcast(ch, payload) {
   for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send(ch, payload); } catch { /* closing */ } }
@@ -151,7 +188,12 @@ function registerIpc() {
     project.coverUrl = coverUrlFor(id);
     return project;
   });
-  ipcMain.handle('projects:delete', async (_e, id) => { if (queue) await queue.removeProject(id); return store.deleteProject(id); });
+  ipcMain.handle('projects:delete', async (_e, id) => {
+    if (queue) await queue.removeProject(id);
+    // A book from a watched folder stays deleted: the next check won't bring it back.
+    try { const p = await store.getProject(id); if (p.source && watcher) await watcher.ignore(p.source.path); } catch { /* already gone */ }
+    return store.deleteProject(id);
+  });
   ipcMain.handle('projects:create', async (_e, input) => {
     const project = await store.createProject(input);
     if (input.cover) {
@@ -288,38 +330,19 @@ function registerIpc() {
     }
   });
   // input: { books: [{ path, series, size, mtimeMs }], settings, queue: bool }
+  // input: { books: [{ path, series, size, mtimeMs }], settings, queue: bool }
   ipcMain.handle('folder:import', async (_e, input) => {
-    const books = input.books || [];
-    const created = [];
-    const failed = [];
-    for (let i = 0; i < books.length; i++) {
-      const b = books[i];
-      broadcast('folder:progress', { done: i, total: books.length, name: path.basename(b.path) });
-      const m = await readManuscript(b.path);
-      const empty = !m.error && (Array.isArray(m.blocks) ? m.blocks.length === 0 : !String(m.text || '').trim());
-      if (m.error || empty) { failed.push({ name: m.fileName, reason: m.error ? 'error' : 'empty' }); continue; }
-      try {
-        const project = await store.createProject({
-          name: (m.title && m.title.trim()) || bookName(m.fileName),
-          text: m.text,
-          blocks: m.blocks,
-          settings: input.settings || {},
-          series: b.series,
-          source: { path: b.path, size: b.size, mtimeMs: b.mtimeMs },
-        });
-        if (m.cover) {
-          try { const jpeg = normalizeCoverJpeg(Buffer.from(m.cover, 'base64')); if (jpeg) await store.saveCover(project.id, jpeg); } catch { /* no cover */ }
-        }
-        const words = project.segments.reduce((n, s) => n + (s.original ? s.original.split(/\s+/).length : 0), 0);
-        created.push({ id: project.id, name: project.name, words });
-      } catch (err) {
-        failed.push({ name: m.fileName, reason: 'error' });
-      }
-    }
-    broadcast('folder:progress', { done: books.length, total: books.length });
-    if (input.queue && created.length) await queue.add(created.map((c) => c.id));
-    return { created, failed };
+    const r = await importBooks(input.books || [], input.settings || {});
+    if (input.queue && r.created.length) await queue.add(r.created.map((c) => c.id));
+    return r;
   });
+
+  // ---- Watched folders: checked on start and on "Check now" ------------------
+  ipcMain.handle('watch:list', () => watcher.folders());
+  ipcMain.handle('watch:add', (_e, input) => watcher.add(input));
+  ipcMain.handle('watch:remove', (_e, dir) => watcher.remove(dir));
+  ipcMain.handle('watch:update', (_e, { path: dir, patch }) => watcher.update(dir, patch));
+  ipcMain.handle('watch:check', () => watcher.check());
 
   // ---- Translation queue ---------------------------------------------------
   ipcMain.handle('queue:get', () => queue.get());
@@ -625,6 +648,7 @@ app.whenReady().then(() => {
   builtin = createBuiltin({ app, store });
   engine = createEngine({ store, builtin });
   queue = createQueue({ engine, file: path.join(app.getPath('userData'), 'queue.json'), send: broadcast });
+  watcher = createWatcher({ store, scanFolder, listBooks, sameSource, importBooks, queue, send: broadcast });
   // Tell every window when the built-in translator starts, loads, fails or stops.
   builtin.onStatus((st) => {
     for (const w of BrowserWindow.getAllWindows()) { try { w.webContents.send('builtin:status', st); } catch { /* closing */ } }
@@ -632,6 +656,8 @@ app.whenReady().then(() => {
 
   registerIpc();
   createWindow();
+  // Look in the watched folders for new books once the window is up.
+  setTimeout(() => { watcher.check().catch(() => {}); }, 4000);
 
   // Check GitHub for a new version on start (downloads in the background;
   // installs on quit or with "Restart to update" in Settings).

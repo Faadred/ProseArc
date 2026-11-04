@@ -85,6 +85,16 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('folder:progress', listener);
     return () => ipcRenderer.removeListener('folder:progress', listener);
   },
+  watchList: () => ipcRenderer.invoke('watch:list'),
+  watchAdd: (input) => ipcRenderer.invoke('watch:add', input),
+  watchRemove: (dir) => ipcRenderer.invoke('watch:remove', dir),
+  watchUpdate: (dir, patch) => ipcRenderer.invoke('watch:update', { path: dir, patch }),
+  watchCheck: () => ipcRenderer.invoke('watch:check'),
+  onWatchResult: (callback) => {
+    const listener = (_e, r) => callback(r);
+    ipcRenderer.on('watch:result', listener);
+    return () => ipcRenderer.removeListener('watch:result', listener);
+  },
   queueGet: () => ipcRenderer.invoke('queue:get'),
   queueAdd: (ids) => ipcRenderer.invoke('queue:add', ids),
   queueRemove: (id) => ipcRenderer.invoke('queue:remove', id),

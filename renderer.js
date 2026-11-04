@@ -1770,6 +1770,7 @@ async function renderSettings() {
   }
   else suggestModels('#set-model-list', prov);
   renderAppUpdate();
+  if (typeof renderWatchPanel === 'function') renderWatchPanel();
   renderModelsPanel();
   // Appearance reflects the current device state.
   syncSegmented();

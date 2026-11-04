@@ -134,6 +134,7 @@ async function openFolderModal() {
   $('#fm-target').value = s.targetLang || 'Arabic';
   $('#fm-style').value = '';
   $('#fm-queue').checked = true;
+  $('#fm-watch').checked = true;
   await fillProviderSelect('#fm-provider', s.provider || 'builtin');
   await fmProviderChanged(s.model || '');
   $('#folder-modal').classList.add('open');
@@ -241,7 +242,10 @@ async function fmImport() {
     model: provider === 'builtin' ? $('#fm-bmodel').value : $('#fm-model').value.trim(),
   };
   const brief = $('#fm-style').value.trim();
+  if (brief) settings.styleBrief = brief; // stored on each new book
   const wantQueue = $('#fm-queue').checked;
+  const wantWatch = $('#fm-watch').checked;
+  const root = fmTree.path;
   $('#fm-import').disabled = true;
   $('#fm-progress').hidden = false;
   const off = window.api.onFolderProgress((p) => {
@@ -249,14 +253,7 @@ async function fmImport() {
   });
   const r = await window.api.importFolder({ books, settings, queue: false });
   off();
-  // The style brief is a per-book field: set it on each new book.
-  if (brief) {
-    for (const c of r.created) {
-      const p = await window.api.getProject(c.id);
-      p.styleBrief = brief;
-      await window.api.saveProject(p);
-    }
-  }
+  if (wantWatch) { await window.api.watchAdd({ path: root, settings, autoTranslate: false }); renderWatchButton(); }
   closeFolderModal();
   if (r.created.length) toast(t('fm.done', { n: r.created.length }), 'success');
   if (r.failed.length) toast(t('fm.failed', { n: r.failed.length, names: r.failed.map((f) => f.name).slice(0, 3).join(document.documentElement.lang === 'ar' ? '، ' : ', ') }), 'error');
@@ -286,3 +283,78 @@ $('#import-folder-btn').addEventListener('click', openFolderModal);
 $('#fm-cancel').addEventListener('click', closeFolderModal);
 $('#fm-import').addEventListener('click', fmImport);
 $('#folder-modal').addEventListener('click', (e) => { if (e.target.id === 'folder-modal') closeFolderModal(); });
+
+// ---- Watched folders (Settings → General, and "Check folders" in the Library) --
+function whenText(ms) {
+  if (!ms) return '—';
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 45) return t('wf.justNow');
+  const rtf = new Intl.RelativeTimeFormat(document.documentElement.lang || 'en', { numeric: 'auto' });
+  if (s < 3600) return rtf.format(-Math.round(s / 60), 'minute');
+  if (s < 86400) return rtf.format(-Math.round(s / 3600), 'hour');
+  return rtf.format(-Math.round(s / 86400), 'day');
+}
+
+async function renderWatchButton() {
+  const list = await window.api.watchList();
+  $('#watch-check-btn').hidden = list.length === 0;
+  return list;
+}
+
+async function renderWatchPanel() {
+  const box = $('#wf-list');
+  if (!box) return;
+  const list = await renderWatchButton();
+  $('#wf-check').hidden = list.length === 0;
+  if (!list.length) { box.innerHTML = `<li class="wf-empty">${escapeHtml(t('wf.empty'))}</li>`; return; }
+  box.innerHTML = list.map((f, i) => `
+    <li class="wf-row${f.missing ? ' missing' : ''}" data-i="${i}">
+      <span class="folder-icon">${icon('folder')}</span>
+      <span class="wf-text"><strong dir="ltr">${escapeHtml(f.path)}</strong>
+        <small>${escapeHtml(f.missing ? t('wf.missing') : f.lastAdded ? t('wf.metaAdded', { when: whenText(f.lastChecked), n: f.lastAdded }) : t('wf.meta', { when: whenText(f.lastChecked) }))}</small>
+        <label class="check wf-auto"><input type="checkbox" class="js-wf-auto" ${f.autoTranslate ? 'checked' : ''} /> <span>${escapeHtml(t('wf.auto'))}</span></label></span>
+      <button class="icon-btn js-wf-rm" title="${escapeHtml(t('wf.remove'))}">${icon('x')}</button>
+    </li>`).join('');
+  box._list = list;
+}
+
+$('#wf-list').addEventListener('change', async (e) => {
+  if (!e.target.classList.contains('js-wf-auto')) return;
+  const f = $('#wf-list')._list[e.target.closest('.wf-row').dataset.i];
+  await window.api.watchUpdate(f.path, { autoTranslate: e.target.checked });
+});
+$('#wf-list').addEventListener('click', async (e) => {
+  const b = e.target.closest('.js-wf-rm');
+  if (!b) return;
+  const f = $('#wf-list')._list[b.closest('.wf-row').dataset.i];
+  await window.api.watchRemove(f.path);
+  toast(t('wf.removed', { path: f.path }), 'info');
+  renderWatchPanel();
+});
+
+let manualCheck = false;
+async function checkWatched(btn) {
+  manualCheck = true;
+  btn.disabled = true;
+  const label = btn.querySelector('span');
+  const was = label.textContent;
+  label.textContent = t('wf.checking');
+  try { await window.api.watchCheck(); } finally {
+    btn.disabled = false;
+    label.textContent = was;
+  }
+}
+$('#wf-check').addEventListener('click', (e) => checkWatched(e.currentTarget));
+$('#watch-check-btn').addEventListener('click', (e) => checkWatched(e.currentTarget));
+
+window.api.onWatchResult((r) => {
+  const n = r.added.length;
+  if (n) toast(n === 1 ? t('wf.found1') : t('wf.found', { n }), 'success');
+  else if (manualCheck && !r.missing.length) toast(t('wf.none'), 'info');
+  if (manualCheck) for (const m of r.missing) toast(t('wf.missingToast', { path: m }), 'error');
+  if (r.failed.length) toast(t('fm.failed', { n: r.failed.length, names: r.failed.map((f) => f.name).slice(0, 3).join(document.documentElement.lang === 'ar' ? '، ' : ', ') }), 'error');
+  manualCheck = false;
+  if (n && libVisible()) renderLibrary();
+  if ($('#view-settings').classList.contains('active')) renderWatchPanel();
+});
+renderWatchButton();

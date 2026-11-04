@@ -79,8 +79,13 @@ npm test           # node:test suites in test/ (no network: fake servers on 127.
   Order: shared < series < book (the engine merges shared + series in `baseGlossary()`, `buildMessages` puts the
   book's terms on top), read when each book's run starts, so a name added during book 1 is used for book 2. The
   Glossary page shows a "This series" section for a book in a series; the highlight popup and name suggestions offer
-  "This series" first (Enter adds there). Next (step 3): watched folders (check on start + "Check now",
-  auto-translate off by default).
+  "This series" first (Enter adds there).
+- Watched folders (step 3, 2026-11-04): `src/watch.js`, kept in `app-config.json` → `watchedFolders` (path, the
+  settings chosen at import, `autoTranslate` (off by default), `ignored` file paths, lastChecked/lastAdded, missing).
+  Checked 4 s after start and on "Check now" (Settings → General → Watched folders, and "Check folders" in the
+  Library); new files go through the same `importBooks()` as the Import folder dialog (same series layout). A book
+  deleted from the Library is added to `ignored` so it never comes back; unreadable files too. A missing folder
+  (unplugged drive) is marked and skipped. No live file watching (unreliable on network/USB drives).
 - Data: `%APPDATA%\prosearc\` (`projects\`, `glossary-global.json`, settings, keys, `app-config.json` for
   model folders + engine choice, `engine\`).
 - Providers (step 5): one registry, `src/providers.js` (id, kind builtin/local/cloud/custom, base URL, key link),

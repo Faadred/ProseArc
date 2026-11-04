@@ -58,6 +58,7 @@
           <p class="lede" id="lib-lede">Your books in translation.</p>
         </div>
         <div class="head-actions" id="lib-actions">
+          <button class="btn btn-ghost" id="watch-check-btn" hidden><i data-icon="refresh-cw"></i><span data-i18n="wf.checkLib">Check folders</span></button>
           <button class="btn btn-ghost" id="import-folder-btn"><i data-icon="folder-plus"></i><span data-i18n="fm.btn">Import folder</span></button>
           <button class="btn btn-primary" id="new-project-btn"><i data-icon="plus"></i><span data-i18n="lib.new">Import book</span></button>
         </div>
@@ -490,6 +491,14 @@
           <p class="settings-note" data-i18n="set.appearanceNote">Appearance is saved on this device.</p>
         </div>
 
+        <!-- Watched folders: checked on start and on Check now -->
+        <div class="panel">
+          <h3 class="panel-title"><i data-icon="folder-open"></i><span data-i18n="wf.title">Watched folders</span></h3>
+          <ul class="wf-list" id="wf-list"></ul>
+          <div class="engine-row"><button class="btn btn-ghost btn-sm" id="wf-check"><i data-icon="refresh-cw"></i><span data-i18n="wf.check">Check now</span></button></div>
+          <p class="settings-note" data-i18n="wf.note">New books join their series with the settings chosen when the folder was imported. Books you delete stay deleted.</p>
+        </div>
+
         <!-- Updates: ProseArc itself (the engine has its own in Built-in translator) -->
         <div class="panel">
           <h3 class="panel-title"><i data-icon="refresh-cw"></i><span data-i18n="upd.title">Updates</span></h3>
@@ -629,6 +638,8 @@
         </details>
         <label class="check"><input type="checkbox" id="fm-queue" checked /> <span data-i18n="fm.queue">Translate them one after another</span></label>
         <p class="settings-note" data-i18n="fm.queueNote">One book at a time, in order. You can pause, skip or reorder from the Library.</p>
+        <label class="check"><input type="checkbox" id="fm-watch" checked /> <span data-i18n="fm.watch">Keep watching this folder for new books</span></label>
+        <p class="settings-note" data-i18n="fm.watchNote">ProseArc looks in it each time it starts and adds new books with these settings.</p>
       </div>
 
       <div class="fm-progress" id="fm-progress" hidden><span class="spinner"></span><span id="fm-progress-text"></span></div>
