@@ -1,6 +1,6 @@
 {
   "name": "prosearc",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "A human-in-the-loop translation workspace for novels, powered by a local AI model.",
   "main": "main.js",
   "author": "ProseArc",
@@ -41,7 +41,13 @@
       "!BUILD_BRIEF.md",
       "!vendor/**",
       "!test/**",
-      "!.github/**"
+      "!.github/**",
+      "!.claude/**",
+      "!tools/**",
+      "!test-library/**",
+      "!scripts/**",
+      "!RELEASE_NOTES*.md",
+      "!CLAUDE.md"
     ],
     "publish": {
       "provider": "github",

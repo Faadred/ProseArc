@@ -4,7 +4,7 @@ A human-in-the-loop workspace for translating novels with an AI model: import a 
 the model drafts a translation segment by segment, then the user reviews it side by side, reads it as a book and
 exports it (TXT, MD, PDF, EPUB). Arabic is the main target; RTL everywhere. English/Arabic UI.
 Electron + plain HTML/CSS/JS (no UI framework, no build step). Windows. MIT licence.
-Public repo: https://github.com/Faadred/ProseArc (latest release v1.3.0, 2026-07-02).
+Public repo: https://github.com/Faadred/ProseArc (latest release v1.4.0, 2026-11-02; 1.5.0 being prepared on `release/1.5.0`).
 
 The same author's other app, **Subloc** (https://github.com/Faadred/Subloc; a checkout is also on this PC, ask the
 user for the path), is the model for where ProseArc is going: it looks polished, feels simple for newcomers and
