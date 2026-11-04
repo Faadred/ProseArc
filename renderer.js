@@ -1315,6 +1315,10 @@ function maybeShowGlossPop() {
   tgt.value = '';
   tgt.dir = isRtlLang(currentProject.targetLang) ? 'rtl' : 'auto';
   glossPopSource = text;
+  // A book from a series: "This series" comes first, so names match in every volume.
+  $('#gloss-pop-series').hidden = !openSeries();
+  $('#gloss-pop-shared').classList.toggle('btn-primary', !openSeries());
+  $('#gloss-pop-shared').classList.toggle('btn-ghost', !!openSeries());
 
   pop.hidden = false;
   if (glossPopPos) {
@@ -1367,7 +1371,13 @@ async function addSelectionToGlossary(scope) {
   const target = $('#gloss-pop-tgt').value.trim();
   if (!source || !target) { $('#gloss-pop-tgt').focus(); return; }
 
-  if (scope === 'global') {
+  if (scope === 'series' && openSeries()) {
+    const g = await window.api.getSeriesGlossary(openSeries());
+    g.push({ id: crypto.randomUUID(), source, target });
+    await window.api.saveSeriesGlossary(openSeries(), g);
+    seriesGlossary = g;
+    toast(t('gloss.addedSeries', { src: source }), 'success');
+  } else if (scope === 'global') {
     const g = await window.api.getGlobalGlossary();
     g.push({ id: crypto.randomUUID(), source, target });
     await window.api.saveGlobalGlossary(g);
@@ -1382,11 +1392,12 @@ async function addSelectionToGlossary(scope) {
   hideGlossPop();
 }
 
+$('#gloss-pop-series').addEventListener('click', () => addSelectionToGlossary('series'));
 $('#gloss-pop-shared').addEventListener('click', () => addSelectionToGlossary('global'));
 $('#gloss-pop-project').addEventListener('click', () => addSelectionToGlossary('project'));
 $('#gloss-pop-close').addEventListener('click', hideGlossPop);
 $('#gloss-pop-tgt').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') addSelectionToGlossary('global');
+  if (e.key === 'Enter') addSelectionToGlossary(openSeries() ? 'series' : 'global');
   if (e.key === 'Escape') hideGlossPop();
 });
 $('#rv-original').addEventListener('mouseup', () => setTimeout(maybeShowGlossPop, 0));
@@ -1400,6 +1411,8 @@ document.addEventListener('mousedown', (e) => {
 //  Glossary — Term Manager (shared dictionary + project-only terms)
 // ============================================================================
 let globalGlossary = [];
+let seriesGlossary = []; // the open book's series terms (folder imports)
+const openSeries = () => (currentProject && currentProject.series) || '';
 
 // A "scope" bundles everything that differs between the two sections, so the
 // add/edit/delete/render logic can be written once.
@@ -1413,6 +1426,17 @@ function scopeOf(name) {
       srcSel: '#gl-global-source',
       tgtSel: '#gl-global-target',
       emptyKey: 'gloss.emptyShared',
+    };
+  }
+  if (name === 'series') {
+    return {
+      terms: () => seriesGlossary,
+      setTerms: (t) => { seriesGlossary = t; },
+      save: () => window.api.saveSeriesGlossary(openSeries(), seriesGlossary),
+      listSel: '#gl-series-list',
+      srcSel: '#gl-series-source',
+      tgtSel: '#gl-series-target',
+      emptyKey: 'gloss.emptySeries',
     };
   }
   return {
@@ -1465,6 +1489,15 @@ async function renderGlossary() {
   globalGlossary = await window.api.getGlobalGlossary();
   renderTermList('global');
 
+  // Series section: books from a folder import share their series' terms.
+  const series = openSeries();
+  $('#gl-series-area').hidden = !series;
+  if (series) {
+    seriesGlossary = await window.api.getSeriesGlossary(series);
+    $('#gl-series-scope').textContent = t('gloss.scopeName', { name: series });
+    renderTermList('series');
+  }
+
   // Project-only section appears only when a project is open.
   if (currentProject) {
     if (!Array.isArray(currentProject.glossary)) currentProject.glossary = [];
@@ -1505,6 +1538,7 @@ function suggestTerms() {
   const existing = new Set();
   for (const g of (currentProject.glossary || [])) if (g.source) existing.add(g.source.toLowerCase());
   for (const g of (globalGlossary || [])) if (g.source) existing.add(g.source.toLowerCase());
+  if (openSeries()) for (const g of (seriesGlossary || [])) if (g.source) existing.add(g.source.toLowerCase());
 
   const counts = new Map();
   const re = /[A-Z][a-zà-öø-ÿ'’\-]+(?:\s+[A-Z][a-zà-öø-ÿ'’\-]+)*/g;
@@ -1560,18 +1594,23 @@ function renderSuggestions() {
       `<span class="suggest-count">${it.count}×</span>` +
       `<span class="arrow">→</span>` +
       `<input class="js-stgt" type="text" placeholder="${escapeHtml(t('gloss.suggestTgtPh'))}" />` +
-      `<button class="btn btn-primary btn-sm js-add-book">${escapeHtml(t('gloss.addBook'))}</button>` +
+      (openSeries()
+        ? `<button class="btn btn-primary btn-sm js-add-series">${escapeHtml(t('gloss.addSeries'))}</button>` +
+          `<button class="btn btn-ghost btn-sm js-add-book">${escapeHtml(t('gloss.thisBook'))}</button>`
+        : `<button class="btn btn-primary btn-sm js-add-book">${escapeHtml(t('gloss.addBook'))}</button>`) +
       `<button class="btn btn-ghost btn-sm js-add-shared">${escapeHtml(t('gloss.addShared'))}</button>` +
       `<button class="js-dismiss" title="${escapeHtml(t('gloss.dismiss'))}">${icon('x')}</button>`;
     const tgt = row.querySelector('.js-stgt');
     tgt.dir = rtl ? 'rtl' : 'auto';
     row.querySelector('.js-add-book').addEventListener('click', () => addSuggestion('project', it.text, tgt.value));
+    const toSeries = row.querySelector('.js-add-series');
+    if (toSeries) toSeries.addEventListener('click', () => addSuggestion('series', it.text, tgt.value));
     row.querySelector('.js-add-shared').addEventListener('click', () => addSuggestion('global', it.text, tgt.value));
     row.querySelector('.js-dismiss').addEventListener('click', () => {
       dismissedSuggestions.add(it.text.toLowerCase());
       renderSuggestions();
     });
-    tgt.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSuggestion('project', it.text, tgt.value); });
+    tgt.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSuggestion(openSeries() ? 'series' : 'project', it.text, tgt.value); });
     list.appendChild(row);
   }
 }
@@ -1617,6 +1656,9 @@ async function deleteTerm(name, id) {
 
 $('#gl-global-add').addEventListener('click', () => addTerm('global'));
 $('#gl-project-add').addEventListener('click', () => addTerm('project'));
+$('#gl-series-add').addEventListener('click', () => addTerm('series'));
+['#gl-series-source', '#gl-series-target'].forEach((sel) =>
+  $(sel).addEventListener('keydown', (e) => { if (e.key === 'Enter') addTerm('series'); }));
 ['#gl-global-source', '#gl-global-target'].forEach((sel) =>
   $(sel).addEventListener('keydown', (e) => { if (e.key === 'Enter') addTerm('global'); }));
 ['#gl-project-source', '#gl-project-target'].forEach((sel) =>

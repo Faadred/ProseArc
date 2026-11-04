@@ -150,3 +150,29 @@ test('retranslateSegment redoes just one segment', async (t) => {
   const saved = await store.getProject(project.id);
   assert.deepEqual(saved.segments.map((s) => [s.translation, s.status]), [['again', 'translated'], ['', 'pending']]);
 });
+
+test('series glossary: book terms win over series terms, series terms over shared ones', async (t) => {
+  const { base, calls } = await startServer(t, () => openaiReply('ok'));
+  const { store, engine, project } = await setup(t, { text: 'Mara met Oren by the Lantern.', secrets: { lmstudioBaseUrl: `${base}/v1` } });
+  // The book belongs to a series (a folder import).
+  const p = await store.getProject(project.id);
+  p.series = 'Fantasy / The Glass Lantern';
+  p.glossary = [{ id: 'b1', source: 'Oren', target: 'BOOK-Oren' }];
+  await store.saveProject(p);
+  await store.saveGlobalGlossary([
+    { id: 'g1', source: 'Mara', target: 'SHARED-Mara' },
+    { id: 'g2', source: 'Oren', target: 'SHARED-Oren' },
+    { id: 'g3', source: 'Lantern', target: 'SHARED-Lantern' },
+  ]);
+  await store.saveSeriesGlossary('Fantasy / The Glass Lantern', [
+    { id: 's1', source: 'Mara', target: 'SERIES-Mara' },
+    { id: 's2', source: 'Oren', target: 'SERIES-Oren' },
+  ]);
+  await store.saveSeriesGlossary('Another series', [{ id: 'x', source: 'Lantern', target: 'OTHER-Lantern' }]);
+  await run(engine, (s) => engine.start(project.id, s));
+  const system = calls[0].body.messages[0].content;
+  assert.match(system, /"Mara" → "SERIES-Mara"/);
+  assert.match(system, /"Oren" → "BOOK-Oren"/);
+  assert.match(system, /"Lantern" → "SHARED-Lantern"/);
+  assert.doesNotMatch(system, /SHARED-Mara|SERIES-Oren|SHARED-Oren|OTHER-/);
+});

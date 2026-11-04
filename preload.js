@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.invoke('projects:saveGlossary', { projectId, glossary }),
   getGlobalGlossary: () => ipcRenderer.invoke('glossary:getGlobal'),
   saveGlobalGlossary: (glossary) => ipcRenderer.invoke('glossary:saveGlobal', glossary),
+  getSeriesGlossary: (series) => ipcRenderer.invoke('glossary:getSeries', series),
+  saveSeriesGlossary: (series, glossary) => ipcRenderer.invoke('glossary:saveSeries', { series, glossary }),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
   getSecrets: () => ipcRenderer.invoke('secrets:get'),

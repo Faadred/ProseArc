@@ -169,6 +169,7 @@ test('queue: pause stops the running book, which waits again; restart resumes pa
   await until(() => q.get().items[0].status === 'waiting');
   assert.equal(q.get().state, 'paused');
   assert.deepEqual(engine.ran, ['a']);
+  await new Promise((r) => setTimeout(r, 100)); // let the queue's last save finish before the folder is removed
 
   // Closing the app while a book runs: after restart it waits, the queue is paused.
   const file2 = path.join(dir, 'q2.json');
@@ -196,4 +197,17 @@ test('queue: won\'t start while a book is translated by hand; removing the runni
   assert.deepEqual(q2.get().items.map((x) => [x.projectId, x.status]), [['b', 'done']]);
   await q2.removeProject('b');
   assert.equal(q2.get().items.length, 0);
+});
+
+test('series glossaries: one list per series, an empty list removes it', async (t) => {
+  const store = createStore(path.join(tmpDir(t), 'projects'));
+  assert.deepEqual(await store.getSeriesGlossary('A'), []);
+  assert.deepEqual(await store.getSeriesGlossary(''), []);
+  await store.saveSeriesGlossary('A', [{ id: '1', source: 'x', target: 'y' }]);
+  await store.saveSeriesGlossary('B / C', [{ id: '2', source: 'p', target: 'q' }]);
+  assert.equal((await store.getSeriesGlossary('A'))[0].target, 'y');
+  assert.equal((await store.getSeriesGlossary('B / C'))[0].target, 'q');
+  await store.saveSeriesGlossary('A', []);
+  assert.deepEqual(await store.getSeriesGlossary('A'), []);
+  assert.equal((await store.getSeriesGlossary('B / C')).length, 1, 'other series untouched');
 });
