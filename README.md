@@ -33,7 +33,9 @@
 - **أسلوب ترجمة لكل كتاب** — موجز اختياري (النبرة، الرسمية، الجمهور) يُرسَل مع كل مقطع.
 - **محرّر مراجعة بشاشة مقسّمة** — الأصل مقابل ترجمة قابلة للتحرير، **يدعم RTL** (مثل العربية)، متصفّح مُحسَّن لعشرات آلاف المقاطع، **تصفية حسب الحالة**، بحث مع **تظليل** للمطابقات، و**بحث واستبدال** في كل الترجمات.
 - **القارئ** — اقرأ الترجمة النهائية ككتاب: **محتويات** الفصول، وضبط **الخط/الحجم/العرض/السمة** (داكن · بنّي · فاتح)، و**استئناف الموضع**، و**إشارات وملاحظات** لكل فقرة، وكشف **ثنائي اللغة** للأصل بنقرة.
-- **المسرد** — قاموس مشترك ومصطلحات لكل مشروع (مصطلحات المشروع تتجاوز المشتركة)، تُحقَن فقط في المقاطع التي يظهر فيها المصطلح لمنع تذبذب الأسماء — مع **أسماء مقترحة** تلقائيًا من الكتاب.
+- **المسرد** — قاموس مشترك، ومصطلحات لكل سلسلة ولكل كتاب (مصطلحات الكتاب تتقدّم على السلسلة، والسلسلة على المشتركة)، تُحقَن فقط في المقاطع التي يظهر فيها المصطلح لمنع تذبذب الأسماء — مع **أسماء مقترحة** تلقائيًا من الكتاب.
+- **استيراد مجلد كامل** — يجد ProseArc كل الكتب في المجلد وفي المجلدات التي بداخله، ويصبح كل مجلد **سلسلة** في مكتبتك، بإعدادات واحدة للكل. ثم **قائمة ترجمة** تترجم الكتب واحدًا تلو الآخر (إيقاف مؤقت، استئناف، تغيير الترتيب)، وتبقى بعد إغلاق التطبيق.
+- **المجلدات المراقَبة** — يتحقق ProseArc من مجلداتك عند بدء التشغيل أو حين تضغط «تحقّق الآن»، ويضيف الكتب الجديدة إلى سلسلتها. الترجمة التلقائية للكتب الجديدة خيار لكل مجلد، معطّل افتراضيًا.
 - **التصدير** — TXT وMarkdown وPDF وEPUB (يدعم RTL)، مع تنبيه إن بقي أي مقطع غير مترجم.
 - **الإعدادات** — الافتراضيات للكتب الجديدة، وصفحة **المزوّدين** (بطاقة لكل مزوّد مع اختبار وقائمة نماذجه)، والمترجم المدمج (المحرّك، مجلدات النماذج، التحديثات مع التراجع)، والمظهر.
 - **لمسات** — مظهر نظيف يستخدم النافذة كلها، خطوط مضمّنة (Spectral / Amiri / Inter)، سمتان داكنة وفاتحة، أغلفة للكتب (تُولَّد إن لم يكن للكتاب غلاف)، اختصارات لوحة المفاتيح (F1)، وواجهة كاملة **بالإنجليزية / العربية** مع RTL.
@@ -126,7 +128,9 @@ Built with Electron + plain HTML/CSS/JS — no UI framework.
 - **Per‑book translation style** — an optional brief (tone, formality, audience) sent with every segment.
 - **Split‑screen review editor** — original vs. editable translation, **RTL‑aware** (e.g. Arabic), a virtualized navigator for tens of thousands of segments, **filter by status**, search with live match **highlighting**, **find & replace** across all translations, and one‑click *retranslate* / *mark all reviewed*.
 - **Reader** — read the finished translation as a book: chapter **contents**, adjustable **font / size / width / theme** (dark · sepia · light), **resume position**, per‑paragraph **bookmarks & notes**, and **bilingual** tap‑to‑reveal of the original.
-- **Glossary** — a shared dictionary plus per‑project terms (project overrides shared), injected only into segments where a term appears, to stop name‑drift — plus **auto‑suggested names** detected from the book.
+- **Glossary** — a shared dictionary, plus terms per series and per book (a book's terms win over its series', a series' over shared ones), injected only into segments where a term appears, to stop name‑drift — plus **auto‑suggested names** detected from the book.
+- **Import a whole folder** — ProseArc finds every book in a folder and the folders inside it; each folder becomes a **series** in your library, with one set of settings for all. A **translation queue** then translates them one after another (pause, resume, reorder) and survives closing the app.
+- **Watched folders** — ProseArc checks your folders when it starts or when you press **Check now**, and adds new books to their series. Translating new books automatically is a per‑folder switch, off by default.
 - **Export** — TXT, Markdown, PDF, and EPUB (RTL‑aware), with a warning if any segment is still untranslated.
 - **Settings** — defaults for new books, a **Providers** page (one card per provider, with a test and its model list), the built‑in translator (engine, model folders, updates with Undo), and appearance.
 - **Polish** — a clean look that uses the whole window, bundled fonts (Spectral / Amiri / Inter), dark + light themes, book covers (generated when a book has none), keyboard shortcuts (F1), and a full **English / Arabic** interface with RTL.
