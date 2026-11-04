@@ -363,6 +363,19 @@
       </div>
       <div id="gl-global-list"></div>
 
+      <!-- Series terms: every book of the open book's series (folder imports) -->
+      <div id="gl-series-area" hidden>
+        <h3 class="gl-section-title" style="margin-top:34px"><span data-i18n="gloss.series">This series</span>
+          <span class="gl-scope" id="gl-series-scope"></span></h3>
+        <div class="glossary-add">
+          <input id="gl-series-source" type="text" data-i18n-ph="gloss.srcPh2" placeholder="Source term" />
+          <span class="arrow">→</span>
+          <input id="gl-series-target" type="text" data-i18n-ph="gloss.tgtPh2" placeholder="Target term" />
+          <button class="btn btn-primary" id="gl-series-add" data-i18n="gloss.add">Add pair</button>
+        </div>
+        <div id="gl-series-list"></div>
+      </div>
+
       <!-- Project-specific terms -->
       <h3 class="gl-section-title" style="margin-top:34px"><span data-i18n="gloss.project">This project only</span>
         <span class="gl-scope" id="gl-project-scope" data-i18n="gloss.scopeNo">· no project open</span></h3>
@@ -725,6 +738,7 @@
     <div class="gloss-pop-src" id="gloss-pop-src"></div>
     <input id="gloss-pop-tgt" type="text" data-i18n-ph="gloss.popTgtPh" placeholder="Its translation…" />
     <div class="gloss-pop-actions">
+      <button class="btn btn-primary btn-sm" id="gloss-pop-series" data-i18n="gloss.popSeries" hidden>This series</button>
       <button class="btn btn-primary btn-sm" id="gloss-pop-shared" data-i18n="gloss.popShared">Add to shared</button>
       <button class="btn btn-ghost btn-sm" id="gloss-pop-project" data-i18n="gloss.popProject">This project</button>
     </div>

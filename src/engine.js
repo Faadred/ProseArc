@@ -8,7 +8,7 @@
 // Events are emitted as semantic { key, params } (not finished prose) so the
 // renderer can render them in the user's chosen UI language.
 
-const { buildMessages } = require('./prompt');
+const { buildMessages, effectiveGlossary } = require('./prompt');
 const { byId: providerById, baseUrlFor } = require('./providers');
 
 const REQUEST_TIMEOUT_MS = 120000; // give up on a single request after 2 min
@@ -191,6 +191,14 @@ function createEngine({ store, builtin }) {
 
   const counts = (project) => store.countStatuses(project.segments);
 
+  // The shared dictionary with the book's series terms on top (a series term
+  // wins over a shared one); buildMessages then puts the book's own terms on top.
+  async function baseGlossary(project) {
+    const shared = await store.getGlobalGlossary();
+    if (!project.series || !store.getSeriesGlossary) return shared;
+    return effectiveGlossary(await store.getSeriesGlossary(project.series), shared);
+  }
+
   // The built-in translator runs as its own program; start it (or switch its
   // model) before the first request. Other providers need nothing here.
   async function prepare(project, log = emit) {
@@ -217,7 +225,7 @@ function createEngine({ store, builtin }) {
     catch { emit({ type: 'error', key: 'projectOpen', params: {} }); running = false; return; }
 
     const total = project.segments.length;
-    const globalGlossary = await store.getGlobalGlossary();
+    const globalGlossary = await baseGlossary(project);
     activeSecrets = await store.getSecrets();
     emit({ type: 'started' });
     emit({ type: 'progress', counts: counts(project) });
@@ -291,7 +299,7 @@ function createEngine({ store, builtin }) {
     const index = project.segments.findIndex((s) => s.id === segmentId);
     if (index === -1) { emit({ type: 'error', key: 'segNotFound', params: {} }); running = false; return; }
 
-    const globalGlossary = await store.getGlobalGlossary();
+    const globalGlossary = await baseGlossary(project);
     activeSecrets = await store.getSecrets();
     emit({ type: 'started', mode: 'single' });
     try { await prepare(project); }

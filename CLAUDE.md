@@ -74,8 +74,13 @@ npm test           # node:test suites in test/ (no network: fake servers on 127.
   while the queue runs. UI in `folders-ui.js` (Import folder dialog, queue panel, card badges); the Library groups
   books into series shelves. Online providers: a confirm with the word count before the queue starts.
   Try it with `test-library\` (git-ignored, made-up books); in the demo profile a fake OpenAI-compatible server on
-  127.0.0.1 stands in for a model. Next steps the user agreed to: a shared glossary per series, then watched folders
-  (check on start + "Check now", auto-translate off by default).
+  127.0.0.1 stands in for a model.
+- Series glossary (step 2, 2026-11-04): `glossary-series.json` (series name → terms), `glossary:getSeries/saveSeries`.
+  Order: shared < series < book (the engine merges shared + series in `baseGlossary()`, `buildMessages` puts the
+  book's terms on top), read when each book's run starts, so a name added during book 1 is used for book 2. The
+  Glossary page shows a "This series" section for a book in a series; the highlight popup and name suggestions offer
+  "This series" first (Enter adds there). Next (step 3): watched folders (check on start + "Check now",
+  auto-translate off by default).
 - Data: `%APPDATA%\prosearc\` (`projects\`, `glossary-global.json`, settings, keys, `app-config.json` for
   model folders + engine choice, `engine\`).
 - Providers (step 5): one registry, `src/providers.js` (id, kind builtin/local/cloud/custom, base URL, key link),

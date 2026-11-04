@@ -243,6 +243,26 @@ function createStore(projectsDir, protect = null) {
     }
   }
 
+  // Series glossaries (folder imports): one list per series name, in one file.
+  // Every book of a series uses its series' terms, so names stay the same in every volume.
+  const seriesGlossaryPath = path.join(path.dirname(projectsDir), 'glossary-series.json');
+  async function readSeriesGlossaries() {
+    try { return JSON.parse(await fsp.readFile(seriesGlossaryPath, 'utf8')) || {}; } catch { return {}; }
+  }
+  async function getSeriesGlossary(series) {
+    if (!series) return [];
+    const all = await readSeriesGlossaries();
+    return Array.isArray(all[series]) ? all[series] : [];
+  }
+  async function saveSeriesGlossary(series, glossary) {
+    if (!series) return [];
+    const all = await readSeriesGlossaries();
+    const list = Array.isArray(glossary) ? glossary : [];
+    if (list.length) all[series] = list; else delete all[series];
+    await atomicWrite(seriesGlossaryPath, all);
+    return list;
+  }
+
   /** Atomically save the shared dictionary. */
   async function saveGlobalGlossary(glossary) {
     const list = Array.isArray(glossary) ? glossary : [];
@@ -362,6 +382,8 @@ function createStore(projectsDir, protect = null) {
     markAllReviewed,
     getGlobalGlossary,
     saveGlobalGlossary,
+    getSeriesGlossary,
+    saveSeriesGlossary,
     getSettings,
     saveSettings,
     getSecrets,

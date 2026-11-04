@@ -196,6 +196,8 @@ function registerIpc() {
     store.saveGlossary(projectId, glossary));
   ipcMain.handle('glossary:getGlobal', () => store.getGlobalGlossary());
   ipcMain.handle('glossary:saveGlobal', (_e, glossary) => store.saveGlobalGlossary(glossary));
+  ipcMain.handle('glossary:getSeries', (_e, series) => store.getSeriesGlossary(series));
+  ipcMain.handle('glossary:saveSeries', (_e, { series, glossary }) => store.saveSeriesGlossary(series, glossary));
   ipcMain.handle('settings:get', () => store.getSettings());
   ipcMain.handle('settings:save', (_e, settings) => store.saveSettings(settings));
   ipcMain.handle('secrets:get', () => store.getSecrets());

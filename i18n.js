@@ -353,7 +353,10 @@ const I18N = {
     'pane.original': 'Original · {lang}', 'pane.translation': 'Translation · {lang}',
 
     'gloss.title': 'Glossary',
-    'gloss.lede': 'Terms are injected only into segments where they appear. Project terms override shared ones.',
+    'gloss.lede': 'Terms are injected only into segments where they appear. A book’s terms win over its series’, and series terms win over shared ones.',
+    'gloss.series': 'This series', 'gloss.addSeries': 'Add to series', 'gloss.popSeries': 'This series',
+    'gloss.emptySeries': 'No series terms yet. They apply to every book in this series, so names stay the same in every volume.',
+    'gloss.addedSeries': 'Added to this series — {src}', 'gloss.thisBook': 'This book',
     'gloss.shared': 'Shared dictionary', 'gloss.scopeAll': '· all projects',
     'gloss.project': 'This project only', 'gloss.scopeNo': '· no project open', 'gloss.scopeName': '· {name}',
     'gloss.srcPh': 'Source term — e.g. Shadow Blade', 'gloss.tgtPh': 'Target term — e.g. سيف الظل',
@@ -801,7 +804,10 @@ const I18N = {
     'pane.original': 'الأصل · {lang}', 'pane.translation': 'الترجمة · {lang}',
 
     'gloss.title': 'المسرد',
-    'gloss.lede': 'تُحقَن المصطلحات فقط في المقاطع التي تظهر فيها. مصطلحات المشروع تتجاوز المشتركة.',
+    'gloss.lede': 'تُحقَن المصطلحات فقط في المقاطع التي تظهر فيها. مصطلحات الكتاب تتقدّم على مصطلحات سلسلته، ومصطلحات السلسلة تتقدّم على المشتركة.',
+    'gloss.series': 'هذه السلسلة', 'gloss.addSeries': 'إضافة للسلسلة', 'gloss.popSeries': 'هذه السلسلة',
+    'gloss.emptySeries': 'لا مصطلحات للسلسلة بعد. تنطبق على كل كتب هذه السلسلة، فتبقى الأسماء نفسها في كل جزء.',
+    'gloss.addedSeries': 'أُضيف إلى هذه السلسلة — {src}', 'gloss.thisBook': 'هذا الكتاب',
     'gloss.shared': 'القاموس المشترك', 'gloss.scopeAll': '· لكل المشاريع',
     'gloss.project': 'هذا المشروع فقط', 'gloss.scopeNo': '· لا مشروع مفتوح', 'gloss.scopeName': '· {name}',
     'gloss.srcPh': 'مصطلح المصدر — مثل Shadow Blade', 'gloss.tgtPh': 'مصطلح الهدف — مثل سيف الظل',
