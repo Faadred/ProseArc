@@ -1764,3 +1764,13 @@ html[lang="en"] input[dir="rtl"]:placeholder-shown { direction: ltr; text-align:
 .q-badge.running { background: var(--accent); color: var(--accent-ink, #1C1B22); }
 .q-badge .spinner { width: 12px; height: 12px; border-width: 2px; }
 .fm-tree input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+.wf-list { list-style: none; margin: 0 0 var(--s-3); padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.wf-row { display: flex; align-items: flex-start; gap: var(--s-3); padding: var(--s-3); border-radius: var(--r-md); background: var(--surface-2); }
+.wf-row .folder-icon { color: var(--accent); display: inline-flex; padding-top: 2px; }
+.wf-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.wf-text strong { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-text small { color: var(--muted); font-size: var(--fs-xs); }
+.wf-row.missing small { color: var(--danger); }
+.wf-auto { margin-top: 6px; font-size: var(--fs-sm); }
+.wf-empty { color: var(--muted); font-size: var(--fs-sm); }
+.wf-auto input[type="checkbox"], .modal-folder .check input[type="checkbox"] { accent-color: var(--accent); }
